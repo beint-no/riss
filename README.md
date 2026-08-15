@@ -13,7 +13,7 @@ Riss requires JDK 26. Its MVC adapter targets Spring Framework 7 and Spring Boot
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.2"
+    id("no.beint.riss") version "0.1.3"
 }
 
 riss {

@@ -51,14 +51,14 @@ public class RissController {
     }
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<byte[]> namedSpec(@PathVariable String name) {
+    public ResponseEntity<byte[]> namedSpec(@PathVariable("name") String name) {
         return find(name)
                 .map(this::json)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> namedUi(@PathVariable String name) {
+    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name) {
         if (!properties.isUiEnabled()) {
             return ResponseEntity.notFound().build();
         }

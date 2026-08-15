@@ -16,6 +16,10 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+tasks.withType<JavaCompile>().configureEach {
+    options.compilerArgs.add("-parameters")
+}
+
 tasks.test {
     useJUnitPlatform()
 }
