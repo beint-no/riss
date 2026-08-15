@@ -31,7 +31,7 @@ public final class SpecSets {
                 throw new IllegalStateException("No compiled Riss spec is on the classpath");
             }
             throw new IllegalStateException(
-                    "Multiple Riss specs are on the classpath; set riss.spec to one of: "
+                    "Multiple Riss specs are on the classpath; request /openapi/{name} for one of: "
                             + specs.stream().map(SpecSet::name).toList()
             );
         }
