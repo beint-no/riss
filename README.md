@@ -14,7 +14,7 @@ A process without Spring can load the compiled `SpecSet` through the service loa
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.5"
+    id("no.beint.riss") version "0.1.6"
 }
 ```
 
@@ -39,7 +39,6 @@ class PublicApiDocs
 
 The compiled document is served at `GET /openapi`. The explorer is at `GET /openapi/ui`.
 Those paths are fixed. Do not configure a custom prefix. `/openapi` includes an `ETag`.
-The explorer copies curl with an optional token and the selected server.
 
 If an application compiles more than one document, `/openapi` lists them and each
 document is served at `/openapi/{name}` and `/openapi/{name}/ui`. A single document
