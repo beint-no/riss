@@ -27,7 +27,11 @@ public class RissController {
     private final RissProperties properties;
 
     public RissController(RissProperties properties) {
-        this.specs = SpecSets.load();
+        this(SpecSets.load(), properties);
+    }
+
+    RissController(List<SpecSet> specs, RissProperties properties) {
+        this.specs = List.copyOf(specs);
         this.properties = properties;
     }
 
@@ -52,6 +56,9 @@ public class RissController {
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<byte[]> namedSpec(@PathVariable("name") String name) {
+        if (specs.size() <= 1) {
+            return ResponseEntity.notFound().build();
+        }
         return find(name)
                 .map(this::json)
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -59,7 +66,7 @@ public class RissController {
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name) {
-        if (!properties.isUiEnabled()) {
+        if (!properties.isUiEnabled() || specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
         return find(name)

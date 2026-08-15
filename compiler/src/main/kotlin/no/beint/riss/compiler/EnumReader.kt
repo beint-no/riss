@@ -43,6 +43,7 @@ internal class EnumReader(
                 "RISS-ENUM",
                 location,
                 "enum ${enumClass.qualified()} is missing constructor value '$property' on ${missing.joinToString { it.name }}",
+                enumClass,
             )
             return emptyList()
         }
@@ -78,6 +79,7 @@ internal class EnumReader(
             "RISS-ENUM",
             location,
             "cannot read compile-time values for enum ${enumClass.qualified()}",
+            enumClass,
         )
         return null
     }

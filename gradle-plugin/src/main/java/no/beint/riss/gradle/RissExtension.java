@@ -3,6 +3,10 @@ package no.beint.riss.gradle;
 import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 
+/**
+ * Optional Gradle fallbacks. Prefer {@code @RissDocument} for scan packages, paths,
+ * and the document name.
+ */
 public abstract class RissExtension {
     public abstract Property<String> getGeneratedPackage();
 

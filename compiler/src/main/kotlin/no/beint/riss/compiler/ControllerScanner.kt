@@ -104,7 +104,7 @@ internal class ControllerScanner(
             }
         }
         pathVariables.filterNot(seenPath::contains).forEach { name ->
-            diagnostics.error("RISS-PATH", location, "path variable {$name} has no @PathVariable")
+            diagnostics.error("RISS-PATH", location, "path variable {$name} has no @PathVariable", function)
         }
         requestBody(function, mapping, method, location)?.let(builder::requestBody)
         responses(function, mapping, location).forEach { (code, response) -> builder.response(code, response) }
@@ -245,7 +245,7 @@ internal class ControllerScanner(
     ): Parameter? {
         val name = parameterName(parameter, Names.PATH_VARIABLE) ?: parameter.name?.asString() ?: return null
         if (name !in pathVariables) {
-            diagnostics.error("RISS-PATH", location, "@PathVariable $name is not in the path")
+            diagnostics.error("RISS-PATH", location, "@PathVariable $name is not in the path", parameter)
         }
         val type = parameter.type.resolve()
         val swagger = parameter.annotation(Names.SWAGGER_PARAMETER)
@@ -298,7 +298,7 @@ internal class ControllerScanner(
     private fun flattenQuery(parameter: KSValueParameter, location: String): List<Parameter> {
         val type = parameter.type.resolve()
         val declaration = type.declaration as? KSClassDeclaration ?: run {
-            diagnostics.error("RISS-PARAM", location, "@ParameterObject must be a class")
+            diagnostics.error("RISS-PARAM", location, "@ParameterObject must be a class", parameter)
             return emptyList()
         }
         val constructor = declaration.primaryConstructor
