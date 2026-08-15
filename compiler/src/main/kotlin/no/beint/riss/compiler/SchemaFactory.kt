@@ -46,7 +46,7 @@ internal class SchemaFactory(
         swagger?.string("ref")?.let { return applySwagger(Schema.ref(normalizeRef(it)), swagger) }
         val resolved = unwrap(bindings.resolve(type), bindings)
         if (resolved.isError || resolved.declaration.simpleName.asString() == "<ERROR>") {
-            diagnostics.error("RISS-TYPE", location, "unresolved type")
+            diagnostics.error("RISS-TYPE", location, "unresolved type", type.declaration)
             return Schema.builder().type("object").build()
         }
         val declaration = resolved.declaration
@@ -84,7 +84,7 @@ internal class SchemaFactory(
         }
         val classDeclaration = declaration as? KSClassDeclaration
             ?: run {
-                diagnostics.error("RISS-TYPE", location, "unsupported type $qualified")
+                diagnostics.error("RISS-TYPE", location, "unsupported type $qualified", declaration)
                 return Schema.builder().type("object").build()
             }
         if (Modifier.VALUE in classDeclaration.modifiers || Modifier.INLINE in classDeclaration.modifiers) {
@@ -150,6 +150,7 @@ internal class SchemaFactory(
                 "RISS-TYPE",
                 location,
                 "public contract cannot use $qualified as a request or response type",
+                type.declaration,
             )
         }
         return applyNullability(applyConstraints(Schema.unconstrained(), sources, swagger), type)
@@ -173,6 +174,7 @@ internal class SchemaFactory(
                 "RISS-SCHEMA",
                 location,
                 "${declaration.qualified()} is sealed but has no visible subclasses",
+                declaration,
             )
             inProgress -= name
             return Schema.builder().type("object").build()
@@ -224,6 +226,7 @@ internal class SchemaFactory(
                 "RISS-SCHEMA",
                 location,
                 "${declaration.qualified()} has no serialisable properties",
+                declaration,
             )
         }
         return builder.build()
@@ -500,7 +503,12 @@ internal class SchemaFactory(
         val key = typeArgument(type, 0)
         val keyName = key?.declaration?.qualifiedName?.asString()
         if (key != null && keyName != "kotlin.String" && keyName != "java.lang.String" && key.declaration !is KSTypeParameter) {
-            diagnostics.error("RISS-TYPE", null, "${type.declaration.qualifiedName?.asString()} keys must be String")
+            diagnostics.error(
+                "RISS-TYPE",
+                null,
+                "${type.declaration.qualifiedName?.asString()} keys must be String",
+                type.declaration,
+            )
         }
         return MapArgs(value = typeArgument(type, 1))
     }

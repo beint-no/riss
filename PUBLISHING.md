@@ -26,8 +26,8 @@ Check the version in `build.gradle.kts`, then run:
 After Central Portal release, tag the matching version:
 
 ```sh
-git tag v0.1.3
-git push origin v0.1.3
+git tag v0.1.4
+git push origin v0.1.4
 ```
 
 The GitHub Actions workflow is `.github/workflows/publish.yml`.

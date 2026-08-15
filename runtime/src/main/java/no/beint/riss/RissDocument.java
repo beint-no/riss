@@ -7,6 +7,7 @@ import java.lang.annotation.Target;
 
 /**
  * Compile-time document metadata. Place this on a dedicated type in the API module.
+ * Scan packages, paths, and the document name are read from this type.
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)

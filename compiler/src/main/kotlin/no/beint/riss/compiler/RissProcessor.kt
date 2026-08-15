@@ -47,7 +47,9 @@ private class RissProcessor(
             }
             val assembled = DocumentAssembler(resolver, enumReader, schemas, diagnostics, options).assemble(operations)
             if (diagnostics.problems.isNotEmpty()) {
-                diagnostics.problems.forEach(logger::error)
+                diagnostics.problems.forEach { problem ->
+                    logger.error(problem.message, problem.symbol)
+                }
                 return emptyList()
             }
             SpecEmitter(codeGenerator, options.generatedPackage, options.registryName)

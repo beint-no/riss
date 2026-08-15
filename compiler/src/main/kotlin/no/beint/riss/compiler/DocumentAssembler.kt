@@ -39,6 +39,7 @@ internal class DocumentAssembler(
             diagnostics.error(
                 "RISS-DOCUMENT",
                 "multiple @RissDocument types: ${documentType.joinToString { it.qualified() }}",
+                documentType[1],
             )
         }
         val declared = documentType.singleOrNull()
@@ -57,7 +58,7 @@ internal class DocumentAssembler(
             }
         }
         addNamedSchemas(declared)
-        validateRefs(paths)
+        validateRefs(paths, declared)
         val builder = OpenApi.builder(info)
         paths.forEach(builder::path)
         tags.values.forEach(builder::tag)
@@ -128,7 +129,7 @@ internal class DocumentAssembler(
             ) {
                 val enumClass = enumType.declaration as? KSClassDeclaration
                 if (enumClass == null || enumClass.classKind != ClassKind.ENUM_CLASS) {
-                    diagnostics.error("RISS-ENUM", "enumFrom for $name is not an enum")
+                    diagnostics.error("RISS-ENUM", "enumFrom for $name is not an enum", enumType.declaration)
                     emptyList()
                 } else {
                     enumReader.values(
@@ -273,13 +274,13 @@ internal class DocumentAssembler(
             else -> annotation.string("type") ?: "http"
         }
 
-    private fun validateRefs(paths: Map<String, PathItem>) {
+    private fun validateRefs(paths: Map<String, PathItem>, declared: KSClassDeclaration?) {
         val known = schemas.components().keys
         fun walk(schema: Schema?, location: String) {
             schema ?: return
             schema.ref()?.removePrefix("#/components/schemas/")?.let { name ->
                 if (name !in known) {
-                    diagnostics.error("RISS-REF", location, "unknown schema $name")
+                    diagnostics.error("RISS-REF", location, "unknown schema $name", declared)
                 }
             }
             schema.properties().forEach { (name, property) -> walk(property, "$location.$name") }
