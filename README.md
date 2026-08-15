@@ -14,7 +14,7 @@ A process without Spring can load the compiled `SpecSet` through the service loa
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.6"
+    id("no.beint.riss") version "0.1.7"
 }
 ```
 
