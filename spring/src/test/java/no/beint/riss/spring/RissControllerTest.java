@@ -28,7 +28,7 @@ class RissControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(result -> {
                     var body = result.getResponse().getContentAsString();
-                    if (!body.contains("const specPath = \"/openapi\";") || !body.contains("id=\"token\"")) {
+                    if (!body.contains("const specPath = \"/openapi\";") || body.contains("id=\"token\"")) {
                         throw new AssertionError(body);
                     }
                 });
