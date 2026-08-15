@@ -19,7 +19,7 @@ set +a
 Check the version in `build.gradle.kts`, then run:
 
 ```sh
-./gradlew clean test
+./gradlew build
 ./gradlew publishAndReleaseToMavenCentral
 ```
 
@@ -30,6 +30,6 @@ git tag v0.1.5
 git push origin v0.1.5
 ```
 
-The GitHub Actions workflow is `.github/workflows/publish.yml`.
-It builds on pushes and pull requests, and publishes only from `v*` tags or manual
-`workflow_dispatch`.
+CI is `.github/workflows/ci.yml` and runs `./gradlew build` on pull requests and
+`main`. Publishing is `.github/workflows/publish.yml` and runs only from `v*` tags
+or manual `workflow_dispatch`.
