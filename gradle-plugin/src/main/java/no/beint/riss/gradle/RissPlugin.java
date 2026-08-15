@@ -6,6 +6,7 @@ import org.gradle.api.GradleException;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.tasks.Copy;
 import org.gradle.api.tasks.SourceSet;
 
 import javax.lang.model.SourceVersion;
@@ -65,6 +66,14 @@ public final class RissPlugin implements Plugin<Project> {
 
         project.getTasks().withType(KspAATask.class).configureEach(task -> task.dependsOn(writeClasspath));
         var kspKotlin = project.getTasks().withType(KspAATask.class).matching(task -> task.getName().equals("kspKotlin"));
+        project.getTasks().register("rissSpec", Copy.class, task -> {
+            task.setGroup("build");
+            task.setDescription("Copies the compiled OpenAPI JSON to build/riss/spec");
+            task.from(project.getLayout().getBuildDirectory().dir("generated/ksp/main/resources"));
+            task.include("**/*.json");
+            task.into(project.getLayout().getBuildDirectory().dir("riss/spec"));
+            task.dependsOn(kspKotlin);
+        });
         project.getTasks().register("rissCheck", task -> {
             task.setGroup("verification");
             task.setDescription("Compiles the Riss OpenAPI document");

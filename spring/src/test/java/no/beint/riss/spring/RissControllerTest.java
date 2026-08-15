@@ -2,6 +2,7 @@ package no.beint.riss.spring;
 
 import no.beint.riss.SpecSet;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -9,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class RissControllerTest {
@@ -26,7 +28,7 @@ class RissControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(result -> {
                     var body = result.getResponse().getContentAsString();
-                    if (!body.contains("const specPath = \"/openapi\";")) {
+                    if (!body.contains("const specPath = \"/openapi\";") || !body.contains("id=\"token\"")) {
                         throw new AssertionError(body);
                     }
                 });
@@ -59,6 +61,20 @@ class RissControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/openapi/missing").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void specReturnsNotModifiedWhenEtagMatches() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)));
+        var etag = mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
+
+        mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.IF_NONE_MATCH, etag))
+                .andExpect(status().isNotModified());
     }
 
     @Test
