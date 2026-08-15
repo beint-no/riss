@@ -24,6 +24,7 @@ private class RissProcessor(
         completed = true
         try {
             validateConfiguration()
+            AnnotationIndex.reset()
             val diagnostics = Diagnostics()
             val enumReader = EnumReader(options.classpath, diagnostics)
             val schemas = SchemaFactory(enumReader, diagnostics, options.strict)

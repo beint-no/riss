@@ -86,21 +86,43 @@ internal object Names {
     )
 }
 
+internal object AnnotationIndex {
+    private val cache = java.util.IdentityHashMap<KSAnnotated, Map<String, List<KSAnnotation>>>()
+
+    fun reset() {
+        cache.clear()
+    }
+
+    fun find(host: KSAnnotated, qualifiedName: String): KSAnnotation? = matching(host, qualifiedName).firstOrNull()
+
+    fun findAll(host: KSAnnotated, qualifiedName: String): List<KSAnnotation> {
+        val nested = matching(host, qualifiedName + "s").firstOrNull()?.annotations("value").orEmpty()
+        return matching(host, qualifiedName) + nested
+    }
+
+    private fun matching(host: KSAnnotated, qualifiedName: String): List<KSAnnotation> {
+        val shortName = qualifiedName.substringAfterLast('.')
+        val candidates = index(host)[shortName].orEmpty()
+        if (candidates.size <= 1) {
+            return candidates
+        }
+        return candidates.filter { annotation ->
+            annotation.annotationType.resolve().declaration.qualifiedName?.asString() == qualifiedName
+        }
+    }
+
+    private fun index(host: KSAnnotated): Map<String, List<KSAnnotation>> =
+        cache.getOrPut(host) { host.annotations.groupBy { it.shortName.asString() } }
+}
+
 internal fun KSAnnotation.matches(qualifiedName: String): Boolean =
     shortName.asString() == qualifiedName.substringAfterLast('.') &&
         annotationType.resolve().declaration.qualifiedName?.asString() == qualifiedName
 
-internal fun KSAnnotated.annotation(qualifiedName: String): KSAnnotation? =
-    annotations.firstOrNull { it.matches(qualifiedName) }
+internal fun KSAnnotated.annotation(qualifiedName: String): KSAnnotation? = AnnotationIndex.find(this, qualifiedName)
 
-internal fun KSAnnotated.annotationsNamed(qualifiedName: String): List<KSAnnotation> {
-    val container = qualifiedName + "s"
-    val direct = annotations.filter { it.matches(qualifiedName) }.toList()
-    val nested = annotations.firstOrNull { it.matches(container) }
-        ?.annotations("value")
-        .orEmpty()
-    return direct + nested
-}
+internal fun KSAnnotated.annotationsNamed(qualifiedName: String): List<KSAnnotation> =
+    AnnotationIndex.findAll(this, qualifiedName)
 
 internal fun KSAnnotation.string(name: String): String? =
     (argument(name) as? String)?.takeIf { it.isNotBlank() && it != "<none>" && it != "\u0000" }

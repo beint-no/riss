@@ -26,8 +26,8 @@ Check the version in `build.gradle.kts`, then run:
 After Central Portal release, tag the matching version:
 
 ```sh
-git tag v0.1.6
-git push origin v0.1.6
+git tag v0.1.7
+git push origin v0.1.7
 ```
 
 CI is `.github/workflows/ci.yml` and runs `./gradlew build` on pull requests and

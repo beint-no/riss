@@ -21,6 +21,11 @@ internal class EnumReader(
     private val classpath: List<Path>,
     private val diagnostics: Diagnostics,
 ) {
+    private val loader: URLClassLoader? by lazy {
+        val urls = classpath.mapNotNull { path -> runCatching { path.toUri().toURL() }.getOrNull() }
+        if (urls.isEmpty()) null else URLClassLoader(urls.toTypedArray(), ClassLoader.getPlatformClassLoader())
+    }
+
     fun values(
         enumClass: KSClassDeclaration,
         property: String?,
@@ -185,36 +190,30 @@ internal class EnumReader(
     }
 
     private fun readReflectively(enumClass: KSClassDeclaration): List<EnumEntryValues>? {
-        val name = enumClass.qualified()
-        val urls = classpath.mapNotNull { path ->
-            runCatching { path.toUri().toURL() }.getOrNull()
-        }.toTypedArray()
-        if (urls.isEmpty()) return null
+        val loader = loader ?: return null
         return try {
-            URLClassLoader(urls, ClassLoader.getPlatformClassLoader()).use { loader ->
-                val type = Class.forName(name, true, loader)
-                val constants = type.enumConstants ?: return@use null
-                val parameterNames = enumClass.primaryConstructor
-                    ?.parameters
-                    ?.mapNotNull { it.name?.asString() }
-                    .orEmpty()
-                constants.map { constant ->
-                    val values = linkedMapOf<String, String>()
-                    parameterNames.forEach { parameter ->
-                        val method = type.methods.firstOrNull { method ->
-                            method.name.equals("get${parameter.replaceFirstChar(Char::uppercaseChar)}", ignoreCase = false) &&
-                                method.parameterCount == 0
-                        } ?: type.methods.firstOrNull { method ->
-                            method.name == parameter && method.parameterCount == 0
-                        }
-                        val raw = method?.invoke(constant) ?: return@forEach
-                        values[parameter] = when (raw) {
-                            is Enum<*> -> raw.name
-                            else -> raw.toString()
-                        }
+            val type = Class.forName(enumClass.qualified(), true, loader)
+            val constants = type.enumConstants ?: return null
+            val parameterNames = enumClass.primaryConstructor
+                ?.parameters
+                ?.mapNotNull { it.name?.asString() }
+                .orEmpty()
+            constants.map { constant ->
+                val values = linkedMapOf<String, String>()
+                parameterNames.forEach { parameter ->
+                    val method = type.methods.firstOrNull { method ->
+                        method.name.equals("get${parameter.replaceFirstChar(Char::uppercaseChar)}", ignoreCase = false) &&
+                            method.parameterCount == 0
+                    } ?: type.methods.firstOrNull { method ->
+                        method.name == parameter && method.parameterCount == 0
                     }
-                    EnumEntryValues((constant as Enum<*>).name, values)
+                    val raw = method?.invoke(constant) ?: return@forEach
+                    values[parameter] = when (raw) {
+                        is Enum<*> -> raw.name
+                        else -> raw.toString()
+                    }
                 }
+                EnumEntryValues((constant as Enum<*>).name, values)
             }
         } catch (_: Throwable) {
             null
@@ -222,6 +221,7 @@ internal class EnumReader(
     }
 
     private fun findClass(resource: String): ByteArray? {
+        loader?.getResourceAsStream(resource)?.use { return it.readAllBytes() }
         classpath.forEach { root ->
             if (Files.isDirectory(root)) {
                 val file = root.resolve(resource)
