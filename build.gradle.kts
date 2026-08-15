@@ -15,7 +15,7 @@ plugins {
 
 allprojects {
     group = "no.beint.riss"
-    version = "0.1.2"
+    version = "0.1.3"
 }
 
 subprojects {
