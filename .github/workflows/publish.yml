@@ -2,15 +2,12 @@ name: Publish
 
 on:
   push:
-    branches:
-      - main
     tags:
-      - 'v*'
-  pull_request:
+      - "v*"
   workflow_dispatch:
     inputs:
       automatic_release:
-        description: 'Automatically release the Central Portal deployment'
+        description: "Automatically release the Central Portal deployment"
         required: true
         default: false
         type: boolean
@@ -19,30 +16,9 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build
-    runs-on: macos-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up JDK
-        uses: actions/setup-java@v5
-        with:
-          distribution: oracle
-          java-version: '26'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v5
-
-      - name: Build
-        run: ./gradlew clean build
-
   publish:
     name: Publish to Maven Central
-    needs: build
-    runs-on: macos-latest
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
     env:
       ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
       ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -56,8 +32,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
-          distribution: oracle
-          java-version: '26'
+          distribution: temurin
+          java-version: "26"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
@@ -81,6 +57,9 @@ jobs:
           fi
 
           echo "Publishing version $version"
+
+      - name: Build
+        run: ./gradlew build
 
       - name: Publish
         run: |
