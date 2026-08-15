@@ -13,7 +13,7 @@ Riss requires JDK 26. Its MVC adapter targets Spring Framework 7 and Spring Boot
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.0"
+    id("no.beint.riss") version "0.1.1"
 }
 
 riss {
@@ -41,6 +41,10 @@ class PublicApiDocs
 ```
 
 The compiled document is served at `GET /openapi`. The explorer is at `GET /openapi/ui`.
+Those paths are fixed. Do not configure a custom prefix.
+
+If an application compiles more than one document, `/openapi` lists them and each
+document is served at `/openapi/{name}` and `/openapi/{name}/ui`.
 
 `Any`, `Object` and `JsonNode` as nested fields become unconstrained JSON. Using them as the
 request or response root fails the build. Generic types keep their type arguments, so

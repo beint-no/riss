@@ -35,6 +35,8 @@ The runtime, model, Spring adapter and Gradle plugin are Java. The compiler is K
 
 A request for `GET /openapi` writes the compiled UTF-8 bytes. `GET /openapi/ui` writes one HTML file. There is no schema walk and no YAML conversion at request time.
 
+Those paths are the convention. Apps do not configure a prefix. One compiled document is the default. When several documents exist, `/openapi` lists them and each document is addressed as `/openapi/{name}`.
+
 ## Language
 
 Riss documents HTTP JSON APIs and multipart uploads. It does not implement callbacks, links, webhooks, XML, client generation or a plugin marketplace.
