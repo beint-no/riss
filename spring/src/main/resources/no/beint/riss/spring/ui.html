@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>API</title>
+  <style>
+    @layer reset, theme, shell, op;
+
+    @layer reset {
+      *, *::before, *::after { box-sizing: border-box; }
+      html { color-scheme: light dark; hanging-punctuation: first last; }
+      body { margin: 0; min-height: 100dvh; }
+      button, input { font: inherit; color: inherit; }
+      button { cursor: pointer; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      summary { list-style: none; }
+      summary::-webkit-details-marker { display: none; }
+    }
+
+    @layer theme {
+      :root {
+        --bg: light-dark(oklch(0.978 0.008 85), oklch(0.168 0.012 75));
+        --ink: light-dark(oklch(0.2 0.025 55), oklch(0.965 0.01 85));
+        --muted: light-dark(oklch(0.46 0.02 65), oklch(0.74 0.016 80));
+        --line: light-dark(oklch(0.89 0.014 80), oklch(0.29 0.014 75));
+        --card: light-dark(oklch(0.995 0.003 85), oklch(0.205 0.012 75));
+        --chip: light-dark(oklch(0.955 0.01 80), oklch(0.24 0.014 75));
+        --accent: light-dark(oklch(0.5 0.11 48), oklch(0.82 0.08 72));
+        --get: oklch(0.5 0.12 235);
+        --post: oklch(0.52 0.13 155);
+        --put: oklch(0.58 0.13 72);
+        --patch: oklch(0.54 0.12 305);
+        --delete: oklch(0.55 0.15 25);
+        --sans: "Segoe UI Variable Text", "SF Pro Text", ui-sans-serif, system-ui, sans-serif;
+        --display: "Iowan Old Style", Palatino, "Palatino Linotype", "Times New Roman", serif;
+        --mono: "SF Mono", "Cascadia Mono", ui-monospace, monospace;
+        --radius: 14px;
+        --shadow: 0 1px 0 color-mix(in oklch, var(--ink) 6%, transparent);
+      }
+      body {
+        background:
+          radial-gradient(80rem 28rem at 8% -12%, color-mix(in oklch, var(--accent) 10%, transparent), transparent 58%),
+          var(--bg);
+        color: var(--ink);
+        font: 16px/1.5 var(--sans);
+        text-wrap: pretty;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * { scroll-behavior: auto !important; transition: none !important; }
+      }
+    }
+
+    @layer shell {
+      header.app {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        display: grid;
+        grid-template-columns: minmax(14rem, 1fr) minmax(14rem, 26rem) auto;
+        gap: 1rem 1.2rem;
+        align-items: end;
+        padding: 1rem 1.35rem 0.95rem;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in oklch, var(--bg) 78%, transparent);
+        backdrop-filter: blur(18px) saturate(1.25);
+      }
+      .brand small {
+        display: block;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        font-size: 0.66rem;
+        color: var(--muted);
+      }
+      .brand h1 {
+        margin: 0.12rem 0 0;
+        font: 600 clamp(1.45rem, 2.1vw, 2.05rem)/1.08 var(--display);
+        letter-spacing: -0.035em;
+        text-wrap: balance;
+      }
+      .brand p { margin: 0.18rem 0 0; color: var(--muted); font-size: 0.86rem; }
+      #q {
+        width: 100%;
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 999px;
+        padding: 0.62rem 0.95rem;
+        box-shadow: var(--shadow);
+      }
+      .spec {
+        color: inherit;
+        text-decoration: none;
+        border: 1px solid var(--line);
+        background: var(--card);
+        border-radius: 999px;
+        padding: 0.55rem 0.9rem;
+        font-size: 0.86rem;
+        white-space: nowrap;
+      }
+      .spec:hover { background: color-mix(in oklch, var(--accent) 10%, var(--card)); }
+      main {
+        display: grid;
+        grid-template-columns: 18.5rem minmax(0, 1fr);
+        min-height: calc(100dvh - 6rem);
+      }
+      nav {
+        position: sticky;
+        top: 6rem;
+        align-self: start;
+        max-height: calc(100dvh - 6.2rem);
+        overflow: auto;
+        scrollbar-gutter: stable;
+        padding: 1rem 0.7rem 3rem 0.9rem;
+        border-right: 1px solid var(--line);
+      }
+      nav .group { margin: 0 0 1rem; }
+      nav h2 {
+        margin: 0 0 0.35rem 0.4rem;
+        font: 600 0.68rem/1 var(--sans);
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      nav a {
+        display: grid;
+        grid-template-columns: 3.4rem minmax(0, 1fr);
+        gap: 0.4rem;
+        align-items: baseline;
+        color: inherit;
+        text-decoration: none;
+        padding: 0.28rem 0.4rem;
+        border-radius: 8px;
+        font-size: 0.8rem;
+      }
+      nav a:hover {
+        background: color-mix(in oklch, var(--accent) 12%, var(--card));
+      }
+      nav .path {
+        font-family: var(--mono);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      article { padding: 1.5rem 1.7rem 6rem; max-width: 68rem; }
+      .lead {
+        color: var(--muted);
+        white-space: pre-wrap;
+        margin: 0 0 2rem;
+        max-width: 68ch;
+      }
+      section { margin: 2.6rem 0; }
+      section > h2 {
+        font: 600 1.55rem/1.15 var(--display);
+        letter-spacing: -0.03em;
+        margin: 0 0 0.35rem;
+      }
+      .tag-desc { color: var(--muted); margin: 0 0 1rem; max-width: 70ch; }
+      @media (width < 900px) {
+        header.app { grid-template-columns: 1fr; }
+        main { grid-template-columns: 1fr; }
+        nav { display: none; }
+      }
+    }
+
+    @layer op {
+      .op {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        margin: 0.65rem 0;
+        box-shadow: var(--shadow);
+        overflow: clip;
+      }
+      .op[open] { box-shadow: 0 10px 32px color-mix(in oklch, var(--ink) 6%, transparent); }
+      .op summary {
+        display: grid;
+        grid-template-columns: 4.5rem minmax(0, 1fr) auto;
+        gap: 0.75rem;
+        align-items: baseline;
+        padding: 0.82rem 1rem;
+        cursor: pointer;
+      }
+      .verb {
+        font: 750 0.66rem/1 var(--mono);
+        letter-spacing: 0.08em;
+        text-align: center;
+        padding: 0.34rem 0.2rem;
+        border-radius: 999px;
+        color: white;
+        background: var(--muted);
+      }
+      .GET { background: var(--get); }
+      .POST { background: var(--post); }
+      .PUT { background: var(--put); }
+      .PATCH { background: var(--patch); }
+      .DELETE { background: var(--delete); }
+      .path { font: 500 0.95rem/1.35 var(--mono); overflow-wrap: anywhere; }
+      .sum { color: var(--muted); font-size: 0.88rem; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 0.12rem 0.45rem;
+        background: var(--chip);
+        color: var(--muted);
+        font-size: 0.68rem;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .body { padding: 0 1.05rem 1.15rem; border-top: 1px solid var(--line); }
+      .prose { color: var(--muted); white-space: pre-wrap; }
+      h3 {
+        font-size: 0.7rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 1.05rem 0 0.4rem;
+      }
+      table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+      th, td { text-align: left; padding: 0.38rem 0.4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      code { font-family: var(--mono); font-size: 0.84em; }
+      .schema { display: grid; gap: 0.15rem; padding: 0.2rem 0; }
+      .field {
+        padding: 0.38rem 0 0.38rem 0.7rem;
+        border-left: 1px solid var(--line);
+        margin-left: calc(var(--d, 0) * 0.55rem);
+      }
+      .field-head {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem 0.55rem;
+        align-items: baseline;
+      }
+      .field p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.84rem; }
+      .t { color: var(--accent); font: 500 0.78rem/1.3 var(--mono); }
+      .ghost {
+        margin-top: 0.85rem;
+        background: transparent;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 0.45rem 0.8rem;
+        font-weight: 650;
+      }
+      .hidden { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="app">
+    <div class="brand">
+      <small>Riss</small>
+      <h1 id="title">API</h1>
+      <p id="version"></p>
+    </div>
+    <input id="q" type="search" placeholder="Search methods, paths, tags">
+    <a class="spec" id="spec" href="{{SPEC_PATH}}">OpenAPI JSON</a>
+  </header>
+  <main>
+    <nav id="nav"></nav>
+    <article>
+      <p class="lead" id="desc"></p>
+      <div id="ops"></div>
+    </article>
+  </main>
+  <script>
+    const specPath = "{{SPEC_PATH}}";
+    const $ = (id) => document.getElementById(id);
+
+    const escape = (value) => String(value ?? "")
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+
+    const schemaByRef = (spec, ref) => spec.components?.schemas?.[(ref || "").split("/").pop()];
+
+    const typeLabel = (schema, spec, depth = 0) => {
+      if (!schema || depth > 6) return "";
+      if (schema.$ref) return schema.$ref.split("/").pop();
+      if (schema.anyOf) return schema.anyOf.map((item) => typeLabel(item, spec, depth + 1)).filter(Boolean).join(" | ");
+      if (schema.oneOf) return schema.oneOf.map((item) => typeLabel(item, spec, depth + 1)).filter(Boolean).join(" | ");
+      const types = [].concat(schema.type || []).filter((item) => item !== "null");
+      if (types[0] === "array") return `${typeLabel(schema.items, spec, depth + 1) || "item"}[]`;
+      if (schema.additionalProperties === true) return "object";
+      if (schema.enum) return schema.enum.slice(0, 4).join(" | ") + (schema.enum.length > 4 ? "…" : "");
+      return types[0] || (schema.description === "Any JSON value" ? "any" : "object");
+    };
+
+    const resolve = (schema, spec, depth = 0) => {
+      if (!schema || depth > 8) return schema;
+      if (schema.$ref) return resolve(schemaByRef(spec, schema.$ref), spec, depth + 1);
+      if (schema.anyOf) {
+        return resolve(schema.anyOf.find((item) => ![].concat(item.type || []).includes("null")) || schema.anyOf[0], spec, depth + 1);
+      }
+      if (schema.oneOf) return resolve(schema.oneOf[0], spec, depth + 1);
+      return schema;
+    };
+
+    const preview = (schema, spec, depth = 0) => {
+      if (!schema || depth > 6) return {};
+      const resolved = resolve(schema, spec, depth);
+      if (!resolved) return {};
+      const types = [].concat(resolved.type || []);
+      if (types.includes("array")) return [preview(resolved.items, spec, depth + 1)];
+      if (resolved.properties) {
+        return Object.fromEntries(Object.entries(resolved.properties).map(([name, prop]) => [name, preview(prop, spec, depth + 1)]));
+      }
+      if (resolved.additionalProperties === true || resolved.description === "Any JSON value") return {};
+      if (resolved.enum) return resolved.enum[0];
+      if (resolved.example !== undefined) return resolved.example;
+      if (types.includes("boolean")) return false;
+      if (types.includes("integer") || types.includes("number")) return 0;
+      if (types.includes("string")) return "";
+      return {};
+    };
+
+    const schemaTree = (schema, spec, depth = 0) => {
+      if (!schema || depth > 7) return "";
+      if (schema.$ref) {
+        const name = schema.$ref.split("/").pop();
+        const target = schemaByRef(spec, schema.$ref);
+        return `<div class="field" style="--d:${depth}"><div class="field-head"><code>${escape(name)}</code><span class="t">object</span></div>${target ? schemaTree({ ...target, $ref: undefined }, spec, depth + 1) : ""}</div>`;
+      }
+      if (schema.anyOf || schema.oneOf) {
+        return (schema.anyOf || schema.oneOf).map((item) => schemaTree(item, spec, depth)).join("");
+      }
+      if (schema.properties) {
+        const required = new Set(schema.required || []);
+        return `<div class="schema">${Object.entries(schema.properties).map(([name, prop]) => {
+          const nested = prop.properties || prop.$ref || prop.items?.$ref || prop.items?.properties
+            ? schemaTree(prop.items || prop, spec, depth + 1)
+            : "";
+          return `<div class="field" style="--d:${depth}">
+            <div class="field-head">
+              <code>${escape(name)}</code>
+              ${required.has(name) ? `<span class="pill">req</span>` : ""}
+              <span class="t">${escape(typeLabel(prop, spec))}</span>
+            </div>
+            ${prop.description ? `<p>${escape(prop.description)}</p>` : ""}
+            ${nested}
+          </div>`;
+        }).join("")}</div>`;
+      }
+      if (schema.items) return schemaTree(schema.items, spec, depth);
+      if (schema.description) return `<p class="prose">${escape(schema.description)}</p>`;
+      return "";
+    };
+
+    const firstSchema = (content) => {
+      if (!content) return { schema: null, example: null, type: null };
+      const json = content["application/json"] || Object.values(content)[0];
+      return { schema: json?.schema, example: json?.example, type: Object.keys(content)[0] };
+    };
+
+    const curlFor = (spec, method, path, op) => {
+      const server = spec.servers?.[0]?.url || location.origin;
+      const url = new URL(
+        path.replaceAll(/\{[^}]+\}/g, (match) => `:${match.slice(1, -1)}`),
+        server.endsWith("/") ? server : `${server}/`,
+      );
+      const headers = ["-H 'Accept: application/json'"];
+      Object.values(spec.components?.securitySchemes || {}).forEach((scheme) => {
+        if (scheme.type === "http" && (scheme.scheme || "bearer").toLowerCase() === "bearer") {
+          headers.push("-H 'Authorization: Bearer $API_KEY'");
+        } else if (scheme.type === "apiKey" && scheme.in === "header") {
+          headers.push(`-H '${scheme.name}: $API_KEY'`);
+        }
+      });
+      (op.parameters || []).filter((item) => item.in === "header" && item.required).forEach((header) => {
+        headers.push(`-H '${header.name}: ${header.example ?? "<value>"}'`);
+      });
+      const body = firstSchema(op.requestBody?.content);
+      if (body.schema && method !== "GET" && method !== "HEAD") {
+        headers.push("-H 'Content-Type: application/json'");
+        const sample = body.example ?? preview(body.schema, spec);
+        const json = typeof sample === "string" ? sample : JSON.stringify(sample);
+        return `curl -X ${method} ${headers.join(" ")} --data ${JSON.stringify(json)} ${JSON.stringify(url.toString())}`;
+      }
+      return `curl -X ${method} ${headers.join(" ")} ${JSON.stringify(url.toString())}`;
+    };
+
+    const renderOp = (method, path, op, spec, index) => {
+      const id = `op-${index}`;
+      const body = firstSchema(op.requestBody?.content);
+      const params = op.parameters || [];
+      const success = Object.entries(op.responses || {}).find(([code]) => code.startsWith("2"));
+      const responseSchema = firstSchema(success?.[1]?.content);
+      return `<details class="op" data-text="${escape((method + " " + path + " " + (op.summary || "") + " " + (op.tags || []).join(" ")).toLowerCase())}" id="${id}">
+        <summary>
+          <span class="verb ${escape(method)}">${escape(method)}</span>
+          <span class="path">${escape(path)}</span>
+          <span class="sum">${escape(op.summary || "")}${op.deprecated ? " · deprecated" : ""}</span>
+        </summary>
+        <div class="body">
+          ${op.description ? `<p class="prose">${escape(op.description)}</p>` : ""}
+          ${params.length ? `<h3>Parameters</h3><table><thead><tr><th>Name</th><th>In</th><th>Req</th><th>Type</th><th>Description</th></tr></thead><tbody>${
+            params.map((item) => `<tr><td><code>${escape(item.name)}</code></td><td>${escape(item.in)}</td><td>${item.required ? "yes" : ""}</td><td>${escape(typeLabel(item.schema, spec))}</td><td>${escape(item.description || "")}</td></tr>`).join("")
+          }</tbody></table>` : ""}
+          ${body.schema ? `<h3>Request body${body.type ? ` · ${escape(body.type)}` : ""}</h3>${schemaTree(body.schema, spec)}` : ""}
+          <h3>Responses</h3>
+          <table><thead><tr><th>Code</th><th>Description</th><th>Content</th></tr></thead><tbody>${
+            Object.entries(op.responses || {}).map(([code, response]) =>
+              `<tr><td>${escape(code)}</td><td>${escape(response.description || "")}</td><td>${escape(Object.keys(response.content || {}).join(", "))}</td></tr>`
+            ).join("")
+          }</tbody></table>
+          ${responseSchema.schema ? `<h3>Response shape</h3>${schemaTree(responseSchema.schema, spec)}` : ""}
+          <button class="ghost" type="button" data-curl="${escape(curlFor(spec, method, path, op))}">Copy curl</button>
+        </div>
+      </details>`;
+    };
+
+    fetch(specPath, { headers: { Accept: "application/json" } })
+      .then((response) => response.json())
+      .then((spec) => {
+        document.title = spec.info?.title || "API";
+        $("title").textContent = spec.info?.title || "API";
+        $("version").textContent = [spec.info?.version, spec.info?.contact?.email].filter(Boolean).join(" · ");
+        $("desc").textContent = spec.info?.description || "";
+        const byTag = new Map();
+        Object.entries(spec.paths || {}).forEach(([path, item]) => {
+          Object.entries(item).forEach(([method, op]) => {
+            if (!op || typeof op !== "object" || !op.operationId) return;
+            (op.tags?.length ? op.tags : ["API"]).forEach((tag) => {
+              if (!byTag.has(tag)) byTag.set(tag, []);
+              byTag.get(tag).push({ method: method.toUpperCase(), path, op });
+            });
+          });
+        });
+        const tagMeta = Object.fromEntries((spec.tags || []).map((tag) => [tag.name, tag.description || ""]));
+        let index = 0;
+        $("nav").innerHTML = [...byTag.entries()].map(([tag, ops]) =>
+          `<div class="group"><h2>${escape(tag)}</h2>${
+            ops.map((item) =>
+              `<a href="#op-${index++}"><span class="verb ${escape(item.method)}">${escape(item.method)}</span><span class="path">${escape(item.path)}</span></a>`
+            ).join("")
+          }</div>`
+        ).join("");
+        index = 0;
+        $("ops").innerHTML = [...byTag.entries()].map(([tag, ops]) =>
+          `<section id="tag-${encodeURIComponent(tag)}"><h2>${escape(tag)}</h2>${
+            tagMeta[tag] ? `<p class="tag-desc">${escape(tagMeta[tag])}</p>` : ""
+          }${ops.map((item) => renderOp(item.method, item.path, item.op, spec, index++)).join("")}</section>`
+        ).join("");
+        $("q").oninput = () => {
+          const query = $("q").value.trim().toLowerCase();
+          document.querySelectorAll(".op").forEach((node) => {
+            node.classList.toggle("hidden", Boolean(query) && !node.dataset.text.includes(query));
+          });
+        };
+        document.body.addEventListener("click", async (event) => {
+          const button = event.target.closest("[data-curl]");
+          if (!button) return;
+          await navigator.clipboard.writeText(button.dataset.curl);
+          button.textContent = "Copied";
+          setTimeout(() => { button.textContent = "Copy curl"; }, 1200);
+        });
+      })
+      .catch((error) => { $("desc").textContent = `Failed to load ${specPath}: ${error}`; });
+  </script>
+</body>
+</html>
