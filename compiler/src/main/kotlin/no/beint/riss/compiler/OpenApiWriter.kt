@@ -11,15 +11,12 @@ import no.beint.riss.model.SecurityRequirement
 import no.beint.riss.model.SecurityScheme
 import no.beint.riss.model.Server
 import no.beint.riss.model.Tag
-import tools.jackson.databind.SerializationFeature
 import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
 
 /** Serializes the compiled document with Jackson 3. YAML is not a supported encoding. */
 internal object OpenApiWriter {
-    private val mapper: JsonMapper = JsonMapper.builder()
-        .enable(SerializationFeature.INDENT_OUTPUT)
-        .build()
+    private val mapper: JsonMapper = JsonMapper.builder().build()
 
     fun write(document: OpenApi): ByteArray = mapper.writeValueAsBytes(tree(document))
 

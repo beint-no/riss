@@ -63,12 +63,20 @@ fun main(args: Array<String>) {
     example = "safe",
 )
 @RissObjectSchema(
+    name = "FieldError",
+    properties = [
+        RissProperty(name = "field", example = "status"),
+        RissProperty(name = "message", example = "must not be blank"),
+    ],
+)
+@RissObjectSchema(
     name = "ProblemDetail",
     description = "RFC 9457 problem",
     properties = [
         RissProperty(name = "title", nullable = true, example = "Invalid request"),
         RissProperty(name = "status", type = "integer", format = "int32", example = "400"),
         RissProperty(name = "detail", nullable = true),
+        RissProperty(name = "fieldErrors", type = "array", ref = "FieldError"),
     ],
 )
 @RissGlobalHeader(

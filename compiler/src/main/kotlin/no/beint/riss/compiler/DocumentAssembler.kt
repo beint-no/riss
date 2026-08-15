@@ -155,10 +155,15 @@ internal class DocumentAssembler(
             annotation.annotations("properties").forEach { property ->
                 val propertyName = property.string("name") ?: return@forEach
                 val ref = property.string("ref")
+                val type = property.string("type") ?: "string"
                 val schema = if (ref != null) {
-                    Schema.ref(if (ref.startsWith("#/")) ref else "#/components/schemas/$ref")
+                    val target = Schema.ref(if (ref.startsWith("#/")) ref else "#/components/schemas/$ref")
+                    if (type == "array") {
+                        Schema.builder().type("array").items(target).build()
+                    } else {
+                        target
+                    }
                 } else {
-                    val type = property.string("type") ?: "string"
                     val built = Schema.builder()
                         .type(type)
                         .format(property.string("format"))
