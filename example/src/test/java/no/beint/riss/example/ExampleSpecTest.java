@@ -19,6 +19,10 @@ class ExampleSpecTest {
         assertTrue(compact.contains("\"CurrencyCode\""));
         assertTrue(compact.contains("\"FeatureKindCode\""));
         assertTrue(compact.contains("\"ProblemDetail\""));
+        assertTrue(compact.contains("\"FieldError\""));
+        assertTrue(compact.contains("\"fieldErrors\""));
+        assertTrue(compact.contains("\"#/components/schemas/FieldError\""));
+        assertFalse(json.contains("\n"));
         assertTrue(compact.contains("\"Page_FeatureRes\""));
         assertTrue(compact.contains("\"ProbeResult\""));
         assertTrue(compact.contains("\"oneOf\""));

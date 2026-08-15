@@ -13,7 +13,7 @@ It optimizes for four properties:
 
 ## Output
 
-The compiler emits OpenAPI 3.1.0 JSON. It does not emit OpenAPI 3.0, Swagger 2, or YAML.
+The compiler emits OpenAPI 3.1.0 JSON. The JSON is minified. It does not emit OpenAPI 3.0, Swagger 2, or YAML.
 
 JSON Schema uses the 2020-12 dialect. Nullable values use a `type` array that includes `null`, not the OpenAPI 3.0 `nullable` flag.
 

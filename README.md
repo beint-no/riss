@@ -13,7 +13,7 @@ Riss requires JDK 26. Its MVC adapter targets Spring Framework 7 and Spring Boot
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.1"
+    id("no.beint.riss") version "0.1.2"
 }
 
 riss {
@@ -50,7 +50,7 @@ document is served at `/openapi/{name}` and `/openapi/{name}/ui`.
 request or response root fails the build. Generic types keep their type arguments, so
 `Page<Invoice>` and `Page<User>` are different schemas.
 
-YAML is not a supported encoding. Agents should read `/openapi`.
+YAML is not a supported encoding. The JSON is minified. Agents should read `/openapi`.
 
 ## Modules
 

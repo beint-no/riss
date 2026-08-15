@@ -38,9 +38,10 @@ class OpenApiWriterTest {
             .build()
 
         val json = OpenApiWriter.writeString(document)
-        assertTrue(json.contains("\"openapi\" : \"3.1.0\"") || json.contains("\"openapi\": \"3.1.0\""))
+        assertTrue(json.contains("\"openapi\":\"3.1.0\""))
         assertTrue(json.contains("jsonSchemaDialect"))
         assertTrue(json.contains("/items/{id}"))
+        assertFalse(json.contains('\n'))
         assertFalse(json.contains("yaml"))
     }
 
