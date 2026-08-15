@@ -45,6 +45,13 @@ internal class DocumentAssembler(
         val declared = documentType.singleOrNull()
         val documentAnnotation = declared?.annotation(Names.RISS_DOCUMENT)
         val specName = documentAnnotation?.string("name") ?: options.specName
+        if (!SPEC_NAME.matches(specName)) {
+            diagnostics.error(
+                "RISS-DOCUMENT",
+                "document name '$specName' must be a URL path segment [A-Za-z][A-Za-z0-9._-]*",
+                declared,
+            )
+        }
         val info = info(declared, documentAnnotation)
         val paths = linkedMapOf<String, PathItem>()
         val tags = linkedMapOf<String, Tag>()
@@ -351,5 +358,9 @@ internal class DocumentAssembler(
         val content = linkedMapOf<String, MediaType>()
         extras.forEach { extra -> extra.media()?.let { content.putIfAbsent(it.first, it.second) } }
         return Response(description, content)
+    }
+
+    private companion object {
+        val SPEC_NAME = Regex("[A-Za-z][A-Za-z0-9._-]*")
     }
 }

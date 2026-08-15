@@ -43,6 +43,7 @@ private class RissProcessor(
                 diagnostics.error(
                     "RISS-EMPTY",
                     "no HTTP mappings found in ${scanPackages.ifEmpty { listOf("the compilation") }.joinToString()}",
+                    documentType,
                 )
             }
             val assembled = DocumentAssembler(resolver, enumReader, schemas, diagnostics, options).assemble(operations)

@@ -57,8 +57,8 @@
         top: 0;
         z-index: 6;
         display: grid;
-        grid-template-columns: minmax(14rem, 1fr) minmax(14rem, 26rem) auto;
-        gap: 1rem 1.2rem;
+        grid-template-columns: minmax(14rem, 1fr) minmax(12rem, 22rem) minmax(10rem, 16rem) auto auto;
+        gap: 0.85rem 1rem;
         align-items: end;
         padding: 1rem 1.35rem 0.95rem;
         border-bottom: 1px solid var(--line);
@@ -79,7 +79,7 @@
         text-wrap: balance;
       }
       .brand p { margin: 0.18rem 0 0; color: var(--muted); font-size: 0.86rem; }
-      #q {
+      #q, #token, #server {
         width: 100%;
         border: 1px solid var(--line);
         background: var(--card);
@@ -87,6 +87,7 @@
         padding: 0.62rem 0.95rem;
         box-shadow: var(--shadow);
       }
+      #server { appearance: none; }
       .spec {
         color: inherit;
         text-decoration: none;
@@ -253,6 +254,8 @@
       <p id="version"></p>
     </div>
     <input id="q" type="search" placeholder="Search methods, paths, tags">
+    <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="API token for curl">
+    <select id="server" aria-label="Server"></select>
     <a class="spec" id="spec" href="{{SPEC_PATH}}">OpenAPI JSON</a>
   </header>
   <main>
@@ -349,18 +352,21 @@
       return { schema: json?.schema, example: json?.example, type: Object.keys(content)[0] };
     };
 
+    const selectedServer = (spec) => $("server").value || spec.servers?.[0]?.url || location.origin;
+
     const curlFor = (spec, method, path, op) => {
-      const server = spec.servers?.[0]?.url || location.origin;
+      const server = selectedServer(spec);
       const url = new URL(
         path.replaceAll(/\{[^}]+\}/g, (match) => `:${match.slice(1, -1)}`),
         server.endsWith("/") ? server : `${server}/`,
       );
+      const token = $("token").value.trim() || "$API_KEY";
       const headers = ["-H 'Accept: application/json'"];
       Object.values(spec.components?.securitySchemes || {}).forEach((scheme) => {
         if (scheme.type === "http" && (scheme.scheme || "bearer").toLowerCase() === "bearer") {
-          headers.push("-H 'Authorization: Bearer $API_KEY'");
+          headers.push(`-H 'Authorization: Bearer ${token}'`);
         } else if (scheme.type === "apiKey" && scheme.in === "header") {
-          headers.push(`-H '${scheme.name}: $API_KEY'`);
+          headers.push(`-H '${scheme.name}: ${token}'`);
         }
       });
       (op.parameters || []).filter((item) => item.in === "header" && item.required).forEach((header) => {
@@ -401,7 +407,7 @@
             ).join("")
           }</tbody></table>
           ${responseSchema.schema ? `<h3>Response shape</h3>${schemaTree(responseSchema.schema, spec)}` : ""}
-          <button class="ghost" type="button" data-curl="${escape(curlFor(spec, method, path, op))}">Copy curl</button>
+          <button class="ghost" type="button" data-method="${escape(method)}" data-path="${escape(path)}">Copy curl</button>
         </div>
       </details>`;
     };
@@ -413,6 +419,12 @@
         $("title").textContent = spec.info?.title || "API";
         $("version").textContent = [spec.info?.version, spec.info?.contact?.email].filter(Boolean).join(" · ");
         $("desc").textContent = spec.info?.description || "";
+        const servers = spec.servers?.length ? spec.servers : [{ url: location.origin, description: "This host" }];
+        $("server").innerHTML = servers.map((server) =>
+          `<option value="${escape(server.url)}">${escape(server.description || server.url)}</option>`
+        ).join("");
+        $("token").value = sessionStorage.getItem("riss.token") || "";
+        $("token").addEventListener("input", () => sessionStorage.setItem("riss.token", $("token").value));
         const byTag = new Map();
         Object.entries(spec.paths || {}).forEach(([path, item]) => {
           Object.entries(item).forEach(([method, op]) => {
@@ -438,16 +450,36 @@
             tagMeta[tag] ? `<p class="tag-desc">${escape(tagMeta[tag])}</p>` : ""
           }${ops.map((item) => renderOp(item.method, item.path, item.op, spec, index++)).join("")}</section>`
         ).join("");
-        $("q").oninput = () => {
+        const applySearch = () => {
           const query = $("q").value.trim().toLowerCase();
           document.querySelectorAll(".op").forEach((node) => {
             node.classList.toggle("hidden", Boolean(query) && !node.dataset.text.includes(query));
           });
+          document.querySelectorAll("nav a").forEach((link) => {
+            const target = document.querySelector(link.getAttribute("href"));
+            link.classList.toggle("hidden", Boolean(target) && target.classList.contains("hidden"));
+          });
         };
+        $("q").oninput = applySearch;
+        const openHash = () => {
+          const id = location.hash.slice(1);
+          if (!id) return;
+          const node = document.getElementById(id);
+          if (node instanceof HTMLDetailsElement) {
+            node.open = true;
+            node.scrollIntoView({ block: "start" });
+          }
+        };
+        window.addEventListener("hashchange", openHash);
+        openHash();
         document.body.addEventListener("click", async (event) => {
-          const button = event.target.closest("[data-curl]");
+          const button = event.target.closest("[data-method][data-path]");
           if (!button) return;
-          await navigator.clipboard.writeText(button.dataset.curl);
+          const method = button.dataset.method;
+          const path = button.dataset.path;
+          const op = spec.paths?.[path]?.[method.toLowerCase()];
+          if (!op) return;
+          await navigator.clipboard.writeText(curlFor(spec, method, path, op));
           button.textContent = "Copied";
           setTimeout(() => { button.textContent = "Copy curl"; }, 1200);
         });
