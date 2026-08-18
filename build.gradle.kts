@@ -18,6 +18,11 @@ allprojects {
     version = "0.1.7"
 }
 
+tasks.register("printReleaseVersion") {
+    val releaseVersion = version.toString()
+    doLast { println(releaseVersion) }
+}
+
 subprojects {
     plugins.withId("java") {
         extensions.configure<JavaPluginExtension> {
