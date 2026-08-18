@@ -3,15 +3,16 @@
 This project publishes the `model`, `runtime`, `compiler`, `spring`, and `gradle-plugin`
 modules under `no.beint.riss`. The `example` module is not published.
 
-## One-time setup
+## Credentials
 
-Publishing credentials live in `~/.config/skald/maven-central.env`, the same file used
-for Skald and Thim.
+Set these standard environment variables in the shell or CI environment:
 
-```sh
-set -a
-source ~/.config/skald/maven-central.env
-set +a
+```text
+MAVEN_CENTRAL_USERNAME
+MAVEN_CENTRAL_PASSWORD
+SIGNING_IN_MEMORY_KEY
+SIGNING_IN_MEMORY_KEY_ID
+SIGNING_IN_MEMORY_KEY_PASSWORD
 ```
 
 ## Release
