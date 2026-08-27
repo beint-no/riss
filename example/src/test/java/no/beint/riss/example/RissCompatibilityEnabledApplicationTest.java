@@ -57,7 +57,8 @@ class RissCompatibilityEnabledApplicationTest {
         )) {
             var response = get(path, HttpResponse.BodyHandlers.discarding());
 
-            assertEquals(308, response.statusCode());
+            assertEquals(307, response.statusCode());
+            assertEquals("no-store", response.headers().firstValue("Cache-Control").orElseThrow());
             assertEquals("/demo/openapi/ui", response.headers().firstValue("Location").orElseThrow());
         }
     }

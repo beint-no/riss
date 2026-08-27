@@ -3,6 +3,7 @@ package no.beint.riss.spring;
 import jakarta.servlet.http.HttpServletRequest;
 import no.beint.riss.SpecSet;
 import no.beint.riss.SpecSets;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -49,7 +50,8 @@ public class RissCompatibilityController {
         if (!uiEnabled) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
+        return ResponseEntity.status(HttpStatus.TEMPORARY_REDIRECT)
+                .cacheControl(CacheControl.noStore())
                 .location(URI.create(RissRequestPath.resolve(request, primaryUiPath)))
                 .build();
     }

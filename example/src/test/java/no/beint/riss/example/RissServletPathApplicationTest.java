@@ -33,7 +33,7 @@ class RissServletPathApplicationTest {
         var redirectResponse = get("/context/dispatcher/swagger-ui.html", HttpResponse.BodyHandlers.discarding());
         var explorerResponse = get("/context/dispatcher/openapi/ui", HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(308, redirectResponse.statusCode());
+        assertEquals(307, redirectResponse.statusCode());
         assertEquals(
                 "/context/dispatcher/openapi/ui",
                 redirectResponse.headers().firstValue("Location").orElseThrow()

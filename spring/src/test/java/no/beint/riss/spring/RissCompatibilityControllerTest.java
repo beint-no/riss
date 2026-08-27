@@ -31,7 +31,11 @@ class RissCompatibilityControllerTest {
         }
         for (var path : List.of("/swagger-ui", "/swagger-ui/", "/swagger-ui.html", "/swagger-ui/index.html")) {
             mvc.perform(get(path))
-                    .andExpect(status().isPermanentRedirect())
+                    .andExpect(status().isTemporaryRedirect())
+                    .andExpect(result -> assertHeader(
+                            result.getResponse().getHeader(HttpHeaders.CACHE_CONTROL),
+                            "no-store"
+                    ))
                     .andExpect(result -> assertHeader(result.getResponse().getHeader(HttpHeaders.LOCATION), "/openapi/ui"));
         }
     }
@@ -44,7 +48,7 @@ class RissCompatibilityControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().bytes(PUBLIC_JSON));
         mvc.perform(get("/swagger-ui.html"))
-                .andExpect(status().isPermanentRedirect())
+                .andExpect(status().isTemporaryRedirect())
                 .andExpect(result -> assertHeader(
                         result.getResponse().getHeader(HttpHeaders.LOCATION),
                         "/openapi/public/ui"
@@ -56,7 +60,7 @@ class RissCompatibilityControllerTest {
         var mvc = mvc(List.of(spec("public", PUBLIC_JSON)), properties(null));
 
         mvc.perform(get("/demo/swagger-ui.html").contextPath("/demo"))
-                .andExpect(status().isPermanentRedirect())
+                .andExpect(status().isTemporaryRedirect())
                 .andExpect(result -> assertHeader(
                         result.getResponse().getHeader(HttpHeaders.LOCATION),
                         "/demo/openapi/ui"

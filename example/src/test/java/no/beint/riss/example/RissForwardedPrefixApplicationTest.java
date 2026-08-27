@@ -38,7 +38,7 @@ class RissForwardedPrefixApplicationTest {
                 HttpResponse.BodyHandlers.discarding()
         );
 
-        assertEquals(308, response.statusCode());
+        assertEquals(307, response.statusCode());
         assertEquals("/attacker.example/openapi/ui", response.headers().firstValue("Location").orElseThrow());
     }
 
@@ -59,7 +59,7 @@ class RissForwardedPrefixApplicationTest {
         var redirectResponse = get("/swagger-ui.html", forwardedPrefix, HttpResponse.BodyHandlers.discarding());
         var explorerResponse = get("/openapi/ui", forwardedPrefix, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(308, redirectResponse.statusCode());
+        assertEquals(307, redirectResponse.statusCode());
         assertEquals(
                 "/gateway%2Ftenant%20one/openapi/ui",
                 redirectResponse.headers().firstValue("Location").orElseThrow()
