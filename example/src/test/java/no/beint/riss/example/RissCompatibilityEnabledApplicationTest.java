@@ -39,9 +39,12 @@ class RissCompatibilityEnabledApplicationTest {
         assertEquals(1, context.getBeansOfType(RissCompatibilityController.class).size());
 
         var response = get("/demo/openapi.json", HttpResponse.BodyHandlers.ofString());
+        var explorerResponse = get("/demo/openapi/ui", HttpResponse.BodyHandlers.ofString());
 
         assertEquals(200, response.statusCode());
         assertTrue(response.body().contains("\"openapi\":\"3.1.0\""));
+        assertEquals(200, explorerResponse.statusCode());
+        assertTrue(explorerResponse.body().contains("const specPath = \"/demo/openapi\";"));
     }
 
     @Test

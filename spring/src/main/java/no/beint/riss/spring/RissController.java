@@ -1,5 +1,6 @@
 package no.beint.riss.spring;
 
+import jakarta.servlet.http.HttpServletRequest;
 import no.beint.riss.SpecSet;
 import no.beint.riss.SpecSets;
 import org.springframework.http.HttpHeaders;
@@ -30,8 +31,6 @@ public class RissController {
     private final List<SpecSet> specs;
     private final RissProperties properties;
     private final Map<String, String> etags;
-    private final byte[] catalogJson;
-    private final String catalogEtag;
 
     public RissController(RissProperties properties) {
         this(SpecSets.load(), properties);
@@ -45,29 +44,28 @@ public class RissController {
             tags.put(spec.name(), RissSpecResponse.etag(spec.json()));
         }
         this.etags = Map.copyOf(tags);
-        this.catalogJson = catalogBytes(this.specs);
-        this.catalogEtag = RissSpecResponse.etag(this.catalogJson);
     }
 
     @GetMapping(path = "/openapi", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<byte[]> spec(
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            HttpServletRequest request
     ) {
         if (specs.size() == 1) {
             return json(specs.getFirst(), ifNoneMatch);
         }
-        return catalog(ifNoneMatch);
+        return catalog(request.getContextPath(), ifNoneMatch);
     }
 
     @GetMapping(path = "/openapi/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> ui() {
+    public ResponseEntity<byte[]> ui(HttpServletRequest request) {
         if (!properties.isUiEnabled()) {
             return ResponseEntity.notFound().build();
         }
         if (specs.size() == 1) {
-            return ui(specs.getFirst(), "/openapi");
+            return ui(specs.getFirst(), request.getContextPath() + "/openapi");
         }
-        return catalogUi();
+        return catalogUi(request.getContextPath());
     }
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -84,12 +82,12 @@ public class RissController {
     }
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name) {
+    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name, HttpServletRequest request) {
         if (!properties.isUiEnabled() || specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> ui(spec, "/openapi/" + spec.name()))
+                .map(spec -> ui(spec, request.getContextPath() + "/openapi/" + spec.name()))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -112,43 +110,46 @@ public class RissController {
                 .body(html.getBytes(StandardCharsets.UTF_8));
     }
 
-    private ResponseEntity<byte[]> catalog(String ifNoneMatch) {
-        return bytes(catalogJson, catalogEtag, ifNoneMatch);
+    private ResponseEntity<byte[]> catalog(String contextPath, String ifNoneMatch) {
+        var body = catalogBytes(specs, contextPath);
+        return bytes(body, RissSpecResponse.etag(body), ifNoneMatch);
     }
 
     private ResponseEntity<byte[]> bytes(byte[] body, String etag, String ifNoneMatch) {
         return RissSpecResponse.json(body, etag, ifNoneMatch);
     }
 
-    private static byte[] catalogBytes(List<SpecSet> specs) {
+    private static byte[] catalogBytes(List<SpecSet> specs, String contextPath) {
         var json = new StringBuilder("{\"specs\":[");
+        var openapiPath = contextPath.replace("\\", "\\\\").replace("\"", "\\\"") + "/openapi/";
         for (var index = 0; index < specs.size(); index++) {
             if (index > 0) {
                 json.append(',');
             }
             var name = specs.get(index).name().replace("\\", "\\\\").replace("\"", "\\\"");
             json.append("{\"name\":\"").append(name)
-                    .append("\",\"json\":\"/openapi/").append(name)
-                    .append("\",\"ui\":\"/openapi/").append(name)
+                    .append("\",\"json\":\"").append(openapiPath).append(name)
+                    .append("\",\"ui\":\"").append(openapiPath).append(name)
                     .append("/ui\"}");
         }
         json.append("]}");
         return json.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private ResponseEntity<byte[]> catalogUi() {
+    private ResponseEntity<byte[]> catalogUi(String contextPath) {
         var html = new StringBuilder("""
                 <!doctype html><html lang="en"><meta charset="utf-8">
                 <title>API documents</title>
                 <body><h1>API documents</h1><ul>
                 """);
+        var openapiPath = escape(contextPath) + "/openapi/";
         specs.forEach(spec -> {
             var name = escape(spec.name());
-            html.append("<li><a href=\"/openapi/")
+            html.append("<li><a href=\"").append(openapiPath)
                     .append(name)
                     .append("/ui\">")
                     .append(name)
-                    .append("</a> · <a href=\"/openapi/")
+                    .append("</a> · <a href=\"").append(openapiPath)
                     .append(name)
                     .append("\">JSON</a></li>");
         });
