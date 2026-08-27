@@ -18,6 +18,7 @@ public class RissAutoConfiguration {
     }
 
     @Bean
+    @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "riss.compatibility", name = "enabled", havingValue = "true")
     RissCompatibilityController rissCompatibilityController(RissProperties properties) {
         return new RissCompatibilityController(properties);
