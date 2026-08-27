@@ -53,6 +53,21 @@ class RissForwardedPrefixApplicationTest {
         assertTrue(response.body().contains("/%22;%3C/script%3E%3Cscript%3EglobalThis.rissInjected=true%3C/script%3E/openapi"));
     }
 
+    @Test
+    void validPercentEncodingInForwardedPrefixIsPreserved() throws Exception {
+        var forwardedPrefix = "/gateway%2Ftenant%20one";
+        var redirectResponse = get("/swagger-ui.html", forwardedPrefix, HttpResponse.BodyHandlers.discarding());
+        var explorerResponse = get("/openapi/ui", forwardedPrefix, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(308, redirectResponse.statusCode());
+        assertEquals(
+                "/gateway%2Ftenant%20one/openapi/ui",
+                redirectResponse.headers().firstValue("Location").orElseThrow()
+        );
+        assertEquals(200, explorerResponse.statusCode());
+        assertTrue(explorerResponse.body().contains("/gateway%2Ftenant%20one/openapi"));
+    }
+
     private <T> HttpResponse<T> get(
             String path,
             String forwardedPrefix,
