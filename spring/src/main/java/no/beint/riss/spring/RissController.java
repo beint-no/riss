@@ -1,5 +1,6 @@
 package no.beint.riss.spring;
 
+import jakarta.servlet.http.HttpServletRequest;
 import no.beint.riss.SpecSet;
 import no.beint.riss.SpecSets;
 import org.springframework.http.HttpHeaders;
@@ -13,9 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -33,8 +31,6 @@ public class RissController {
     private final List<SpecSet> specs;
     private final RissProperties properties;
     private final Map<String, String> etags;
-    private final byte[] catalogJson;
-    private final String catalogEtag;
 
     public RissController(RissProperties properties) {
         this(SpecSets.load(), properties);
@@ -45,32 +41,31 @@ public class RissController {
         this.properties = properties;
         var tags = new LinkedHashMap<String, String>();
         for (var spec : this.specs) {
-            tags.put(spec.name(), etag(spec.json()));
+            tags.put(spec.name(), RissSpecResponse.etag(spec.json()));
         }
         this.etags = Map.copyOf(tags);
-        this.catalogJson = catalogBytes(this.specs);
-        this.catalogEtag = etag(this.catalogJson);
     }
 
     @GetMapping(path = "/openapi", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<byte[]> spec(
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            HttpServletRequest request
     ) {
         if (specs.size() == 1) {
             return json(specs.getFirst(), ifNoneMatch);
         }
-        return catalog(ifNoneMatch);
+        return catalog(request, ifNoneMatch);
     }
 
     @GetMapping(path = "/openapi/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> ui() {
+    public ResponseEntity<byte[]> ui(HttpServletRequest request) {
         if (!properties.isUiEnabled()) {
             return ResponseEntity.notFound().build();
         }
         if (specs.size() == 1) {
-            return ui(specs.getFirst(), "/openapi");
+            return ui(specs.getFirst(), RissRequestPath.resolve(request, "/openapi"));
         }
-        return catalogUi();
+        return catalogUi(request);
     }
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -87,12 +82,12 @@ public class RissController {
     }
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name) {
+    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name, HttpServletRequest request) {
         if (!properties.isUiEnabled() || specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> ui(spec, "/openapi/" + spec.name()))
+                .map(spec -> ui(spec, RissRequestPath.resolve(request, "/openapi/" + spec.name())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -115,65 +110,34 @@ public class RissController {
                 .body(html.getBytes(StandardCharsets.UTF_8));
     }
 
-    private ResponseEntity<byte[]> catalog(String ifNoneMatch) {
-        return bytes(catalogJson, catalogEtag, ifNoneMatch);
+    private ResponseEntity<byte[]> catalog(HttpServletRequest request, String ifNoneMatch) {
+        var body = catalogBytes(specs, request);
+        return bytes(body, RissSpecResponse.etag(body), ifNoneMatch);
     }
 
     private ResponseEntity<byte[]> bytes(byte[] body, String etag, String ifNoneMatch) {
-        if (matches(ifNoneMatch, etag)) {
-            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                    .eTag(etag)
-                    .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                    .header("X-Content-Type-Options", "nosniff")
-                    .build();
-        }
-        return ResponseEntity.ok()
-                .contentType(new MediaType(MediaType.APPLICATION_JSON, StandardCharsets.UTF_8))
-                .eTag(etag)
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .header("X-Content-Type-Options", "nosniff")
-                .body(body);
+        return RissSpecResponse.json(body, etag, ifNoneMatch);
     }
 
-    private static byte[] catalogBytes(List<SpecSet> specs) {
+    private static byte[] catalogBytes(List<SpecSet> specs, HttpServletRequest request) {
         var json = new StringBuilder("{\"specs\":[");
         for (var index = 0; index < specs.size(); index++) {
             if (index > 0) {
                 json.append(',');
             }
-            var name = specs.get(index).name().replace("\\", "\\\\").replace("\"", "\\\"");
+            var spec = specs.get(index);
+            var name = jsonEscape(spec.name());
+            var specPath = jsonEscape(RissRequestPath.resolve(request, "/openapi/" + spec.name()));
             json.append("{\"name\":\"").append(name)
-                    .append("\",\"json\":\"/openapi/").append(name)
-                    .append("\",\"ui\":\"/openapi/").append(name)
+                    .append("\",\"json\":\"").append(specPath)
+                    .append("\",\"ui\":\"").append(specPath)
                     .append("/ui\"}");
         }
         json.append("]}");
         return json.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private static boolean matches(String ifNoneMatch, String etag) {
-        if (ifNoneMatch == null || ifNoneMatch.isBlank() || etag == null) {
-            return false;
-        }
-        for (var part : ifNoneMatch.split(",")) {
-            var candidate = part.trim();
-            if ("*".equals(candidate) || candidate.equals(etag) || candidate.equals("W/" + etag)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String etag(byte[] body) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256").digest(body);
-            return "\"" + HexFormat.of().formatHex(digest, 0, 8) + "\"";
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
-        }
-    }
-
-    private ResponseEntity<byte[]> catalogUi() {
+    private ResponseEntity<byte[]> catalogUi(HttpServletRequest request) {
         var html = new StringBuilder("""
                 <!doctype html><html lang="en"><meta charset="utf-8">
                 <title>API documents</title>
@@ -181,12 +145,11 @@ public class RissController {
                 """);
         specs.forEach(spec -> {
             var name = escape(spec.name());
-            html.append("<li><a href=\"/openapi/")
-                    .append(name)
+            var specPath = escape(RissRequestPath.resolve(request, "/openapi/" + spec.name()));
+            html.append("<li><a href=\"").append(specPath)
                     .append("/ui\">")
                     .append(name)
-                    .append("</a> · <a href=\"/openapi/")
-                    .append(name)
+                    .append("</a> · <a href=\"").append(specPath)
                     .append("\">JSON</a></li>");
         });
         html.append("</ul></body></html>");
@@ -199,6 +162,10 @@ public class RissController {
 
     private static String escape(String value) {
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static byte[] loadUi() {

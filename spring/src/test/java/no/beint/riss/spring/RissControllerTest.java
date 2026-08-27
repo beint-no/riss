@@ -39,6 +39,20 @@ class RissControllerTest {
     }
 
     @Test
+    void singleDocumentUiPreservesServletContextPath() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)));
+
+        mvc.perform(get("/demo/openapi/ui").contextPath("/demo").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    var body = result.getResponse().getContentAsString();
+                    if (!body.contains("const specPath = \"/demo/openapi\";")) {
+                        throw new AssertionError(body);
+                    }
+                });
+    }
+
+    @Test
     void severalDocumentsUseNamedPaths() throws Exception {
         var mvc = mvc(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)));
 
@@ -61,6 +75,38 @@ class RissControllerTest {
                 .andExpect(status().isOk());
         mvc.perform(get("/openapi/missing").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void severalDocumentsPreserveServletContextPathInCatalogAndUi() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)));
+
+        mvc.perform(get("/demo/openapi").contextPath("/demo").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    var body = result.getResponse().getContentAsString();
+                    if (!body.contains("\"json\":\"/demo/openapi/public\"")
+                            || !body.contains("\"ui\":\"/demo/openapi/peppol/ui\"")) {
+                        throw new AssertionError(body);
+                    }
+                });
+        mvc.perform(get("/demo/openapi/ui").contextPath("/demo").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    var body = result.getResponse().getContentAsString();
+                    if (!body.contains("href=\"/demo/openapi/public/ui\"")
+                            || !body.contains("href=\"/demo/openapi/peppol\"")) {
+                        throw new AssertionError(body);
+                    }
+                });
+        mvc.perform(get("/demo/openapi/public/ui").contextPath("/demo").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    var body = result.getResponse().getContentAsString();
+                    if (!body.contains("const specPath = \"/demo/openapi/public\";")) {
+                        throw new AssertionError(body);
+                    }
+                });
     }
 
     @Test

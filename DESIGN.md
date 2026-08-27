@@ -37,6 +37,11 @@ A request for `GET /openapi` writes the compiled UTF-8 bytes. `GET /openapi/ui` 
 
 Those paths are the convention. Apps do not configure a prefix. `@RissDocument` is the source of truth for scan packages, paths, and the document name. One compiled document is served only at `/openapi` and `/openapi/ui`. When several documents exist, `/openapi` lists them and each document is addressed as `/openapi/{name}`.
 
+The Spring adapter can opt into compatibility aliases for a primary document. An application
+with several documents must configure the primary document explicitly. JSON aliases serve the
+compiled bytes directly; UI aliases redirect to the canonical Riss explorer. The aliases are
+disabled by default so Riss does not conflict with Springdoc or application-owned routes.
+
 ## Language
 
 Riss documents HTTP JSON APIs and multipart uploads. It does not implement callbacks, links, webhooks, XML, client generation or a plugin marketplace.
