@@ -52,6 +52,18 @@ class RissCompatibilityControllerTest {
     }
 
     @Test
+    void uiAliasesPreserveServletContextPath() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)), properties(null));
+
+        mvc.perform(get("/demo/swagger-ui.html").contextPath("/demo"))
+                .andExpect(status().isPermanentRedirect())
+                .andExpect(result -> assertHeader(
+                        result.getResponse().getHeader(HttpHeaders.LOCATION),
+                        "/demo/openapi/ui"
+                ));
+    }
+
+    @Test
     void severalDocumentsRequireConfiguredPrimaryDocument() {
         assertThrows(
                 IllegalStateException.class,

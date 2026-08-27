@@ -1,5 +1,6 @@
 package no.beint.riss.spring;
 
+import jakarta.servlet.http.HttpServletRequest;
 import no.beint.riss.SpecSet;
 import no.beint.riss.SpecSets;
 import org.springframework.http.HttpHeaders;
@@ -44,12 +45,12 @@ public class RissCompatibilityController {
     }
 
     @GetMapping(path = {"/swagger-ui", "/swagger-ui/", "/swagger-ui.html", "/swagger-ui/index.html"})
-    public ResponseEntity<Void> ui() {
+    public ResponseEntity<Void> ui(HttpServletRequest request) {
         if (!uiEnabled) {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
-                .location(URI.create(primaryUiPath))
+                .location(URI.create(request.getContextPath() + primaryUiPath))
                 .build();
     }
 
