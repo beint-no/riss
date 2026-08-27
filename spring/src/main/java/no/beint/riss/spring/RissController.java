@@ -13,9 +13,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,11 +42,11 @@ public class RissController {
         this.properties = properties;
         var tags = new LinkedHashMap<String, String>();
         for (var spec : this.specs) {
-            tags.put(spec.name(), etag(spec.json()));
+            tags.put(spec.name(), RissSpecResponse.etag(spec.json()));
         }
         this.etags = Map.copyOf(tags);
         this.catalogJson = catalogBytes(this.specs);
-        this.catalogEtag = etag(this.catalogJson);
+        this.catalogEtag = RissSpecResponse.etag(this.catalogJson);
     }
 
     @GetMapping(path = "/openapi", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -120,19 +117,7 @@ public class RissController {
     }
 
     private ResponseEntity<byte[]> bytes(byte[] body, String etag, String ifNoneMatch) {
-        if (matches(ifNoneMatch, etag)) {
-            return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
-                    .eTag(etag)
-                    .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                    .header("X-Content-Type-Options", "nosniff")
-                    .build();
-        }
-        return ResponseEntity.ok()
-                .contentType(new MediaType(MediaType.APPLICATION_JSON, StandardCharsets.UTF_8))
-                .eTag(etag)
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .header("X-Content-Type-Options", "nosniff")
-                .body(body);
+        return RissSpecResponse.json(body, etag, ifNoneMatch);
     }
 
     private static byte[] catalogBytes(List<SpecSet> specs) {
@@ -149,28 +134,6 @@ public class RissController {
         }
         json.append("]}");
         return json.toString().getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static boolean matches(String ifNoneMatch, String etag) {
-        if (ifNoneMatch == null || ifNoneMatch.isBlank() || etag == null) {
-            return false;
-        }
-        for (var part : ifNoneMatch.split(",")) {
-            var candidate = part.trim();
-            if ("*".equals(candidate) || candidate.equals(etag) || candidate.equals("W/" + etag)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static String etag(byte[] body) {
-        try {
-            var digest = MessageDigest.getInstance("SHA-256").digest(body);
-            return "\"" + HexFormat.of().formatHex(digest, 0, 8) + "\"";
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException(exception);
-        }
     }
 
     private ResponseEntity<byte[]> catalogUi() {
