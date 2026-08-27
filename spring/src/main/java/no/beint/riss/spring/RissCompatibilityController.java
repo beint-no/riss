@@ -50,7 +50,7 @@ public class RissCompatibilityController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.status(HttpStatus.PERMANENT_REDIRECT)
-                .location(URI.create(request.getContextPath() + primaryUiPath))
+                .location(URI.create(RissRequestPath.resolve(request, primaryUiPath)))
                 .build();
     }
 

@@ -54,7 +54,7 @@ public class RissController {
         if (specs.size() == 1) {
             return json(specs.getFirst(), ifNoneMatch);
         }
-        return catalog(request.getContextPath(), ifNoneMatch);
+        return catalog(request, ifNoneMatch);
     }
 
     @GetMapping(path = "/openapi/ui", produces = MediaType.TEXT_HTML_VALUE)
@@ -63,9 +63,9 @@ public class RissController {
             return ResponseEntity.notFound().build();
         }
         if (specs.size() == 1) {
-            return ui(specs.getFirst(), request.getContextPath() + "/openapi");
+            return ui(specs.getFirst(), RissRequestPath.resolve(request, "/openapi"));
         }
-        return catalogUi(request.getContextPath());
+        return catalogUi(request);
     }
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -87,7 +87,7 @@ public class RissController {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> ui(spec, request.getContextPath() + "/openapi/" + spec.name()))
+                .map(spec -> ui(spec, RissRequestPath.resolve(request, "/openapi/" + spec.name())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -110,8 +110,8 @@ public class RissController {
                 .body(html.getBytes(StandardCharsets.UTF_8));
     }
 
-    private ResponseEntity<byte[]> catalog(String contextPath, String ifNoneMatch) {
-        var body = catalogBytes(specs, contextPath);
+    private ResponseEntity<byte[]> catalog(HttpServletRequest request, String ifNoneMatch) {
+        var body = catalogBytes(specs, request);
         return bytes(body, RissSpecResponse.etag(body), ifNoneMatch);
     }
 
@@ -119,38 +119,37 @@ public class RissController {
         return RissSpecResponse.json(body, etag, ifNoneMatch);
     }
 
-    private static byte[] catalogBytes(List<SpecSet> specs, String contextPath) {
+    private static byte[] catalogBytes(List<SpecSet> specs, HttpServletRequest request) {
         var json = new StringBuilder("{\"specs\":[");
-        var openapiPath = contextPath.replace("\\", "\\\\").replace("\"", "\\\"") + "/openapi/";
         for (var index = 0; index < specs.size(); index++) {
             if (index > 0) {
                 json.append(',');
             }
-            var name = specs.get(index).name().replace("\\", "\\\\").replace("\"", "\\\"");
+            var spec = specs.get(index);
+            var name = jsonEscape(spec.name());
+            var specPath = jsonEscape(RissRequestPath.resolve(request, "/openapi/" + spec.name()));
             json.append("{\"name\":\"").append(name)
-                    .append("\",\"json\":\"").append(openapiPath).append(name)
-                    .append("\",\"ui\":\"").append(openapiPath).append(name)
+                    .append("\",\"json\":\"").append(specPath)
+                    .append("\",\"ui\":\"").append(specPath)
                     .append("/ui\"}");
         }
         json.append("]}");
         return json.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private ResponseEntity<byte[]> catalogUi(String contextPath) {
+    private ResponseEntity<byte[]> catalogUi(HttpServletRequest request) {
         var html = new StringBuilder("""
                 <!doctype html><html lang="en"><meta charset="utf-8">
                 <title>API documents</title>
                 <body><h1>API documents</h1><ul>
                 """);
-        var openapiPath = escape(contextPath) + "/openapi/";
         specs.forEach(spec -> {
             var name = escape(spec.name());
-            html.append("<li><a href=\"").append(openapiPath)
-                    .append(name)
+            var specPath = escape(RissRequestPath.resolve(request, "/openapi/" + spec.name()));
+            html.append("<li><a href=\"").append(specPath)
                     .append("/ui\">")
                     .append(name)
-                    .append("</a> · <a href=\"").append(openapiPath)
-                    .append(name)
+                    .append("</a> · <a href=\"").append(specPath)
                     .append("\">JSON</a></li>");
         });
         html.append("</ul></body></html>");
@@ -163,6 +162,10 @@ public class RissController {
 
     private static String escape(String value) {
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
+    }
+
+    private static String jsonEscape(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static byte[] loadUi() {
