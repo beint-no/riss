@@ -17,7 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
                 "riss.compatibility.enabled=true",
-                "server.forward-headers-strategy=framework"
+                "server.forward-headers-strategy=framework",
+                "spring.mvc.forwarded-headers.use-forwarded-prefix=true"
         }
 )
 class RissForwardedPrefixApplicationTest {
