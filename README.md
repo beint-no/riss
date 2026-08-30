@@ -72,7 +72,7 @@ aliases are disabled by default to avoid conflicts with Springdoc or application
 
 - `model`: OpenAPI 3.1 types
 - `runtime`: `SpecSet` and compile-time annotations
-- `compiler`: KSP processor. Uses Jackson 3 only to emit JSON
+- `compiler`: KSP processor. Emits deterministic compact JSON without runtime dependencies
 - `spring`: JSON and UI endpoints
 - `gradle-plugin`: build integration
 - `example`: Spring Boot application used as the integration test
