@@ -3,10 +3,11 @@ package no.beint.riss.compiler
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFile
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassVisitor
-import org.objectweb.asm.MethodVisitor
-import org.objectweb.asm.Opcodes
+import java.lang.classfile.ClassFile
+import java.lang.classfile.Opcode
+import java.lang.classfile.instruction.ConstantInstruction
+import java.lang.classfile.instruction.FieldInstruction
+import java.lang.classfile.instruction.InvokeInstruction
 import java.net.URLClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
@@ -251,66 +252,40 @@ internal class EnumReader(
                 .toList()
                 .takeIf { it.isNotEmpty() }
         }
-        val visitor = EnumClassVisitor(enumClass.qualified().replace('.', '/'), parameterNames)
-        ClassReader(bytes).accept(visitor, ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
-        return visitor.entries.takeIf { it.isNotEmpty() }
+        return readEnumEntries(enumClass.qualified().replace('.', '/'), parameterNames, bytes)
     }
 }
 
-private class EnumClassVisitor(
-    private val owner: String,
-    private val parameterNames: List<String>,
-) : ClassVisitor(Opcodes.ASM9) {
+internal fun readEnumEntries(
+    owner: String,
+    parameterNames: List<String>,
+    bytes: ByteArray,
+): List<EnumEntryValues>? {
     val entries = mutableListOf<EnumEntryValues>()
+    val stack = mutableListOf<String>()
+    val initializer = ClassFile.of().parse(bytes).methods()
+        .firstOrNull { it.methodName().equalsString("<clinit>") }
+        ?.code()
+        ?.orElse(null)
+        ?: return null
 
-    override fun visitMethod(
-        access: Int,
-        name: String,
-        descriptor: String,
-        signature: String?,
-        exceptions: Array<out String>?,
-    ): MethodVisitor? {
-        if (name != "<clinit>") return null
-        return object : MethodVisitor(Opcodes.ASM9) {
-            private val stack = mutableListOf<String>()
-
-            override fun visitLdcInsn(value: Any?) {
-                stack += value?.toString().orEmpty()
+    initializer.forEach { element ->
+        when (element) {
+            is ConstantInstruction -> stack += when (element.opcode()) {
+                Opcode.ACONST_NULL -> ""
+                else -> element.constantValue().toString()
             }
 
-            override fun visitIntInsn(opcode: Int, operand: Int) {
-                stack += operand.toString()
+            is FieldInstruction -> if (element.opcode() == Opcode.GETSTATIC) {
+                stack += element.name().stringValue()
             }
 
-            override fun visitInsn(opcode: Int) {
-                val value = when (opcode) {
-                    Opcodes.ICONST_M1 -> "-1"
-                    Opcodes.ICONST_0 -> "0"
-                    Opcodes.ICONST_1 -> "1"
-                    Opcodes.ICONST_2 -> "2"
-                    Opcodes.ICONST_3 -> "3"
-                    Opcodes.ICONST_4 -> "4"
-                    Opcodes.ICONST_5 -> "5"
-                    Opcodes.ACONST_NULL -> ""
-                    else -> return
-                }
-                stack += value
-            }
-
-            override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
-                if (opcode == Opcodes.GETSTATIC) {
-                    stack += name
-                }
-            }
-
-            override fun visitMethodInsn(
-                opcode: Int,
-                owner: String,
-                name: String,
-                descriptor: String,
-                isInterface: Boolean,
-            ) {
-                if (opcode == Opcodes.INVOKESPECIAL && owner == this@EnumClassVisitor.owner && name == "<init>") {
+            is InvokeInstruction -> {
+                if (
+                    element.opcode() == Opcode.INVOKESPECIAL &&
+                    element.owner().asInternalName() == owner &&
+                    element.name().equalsString("<init>")
+                ) {
                     val declared = parameterNames.size
                     if (stack.size >= declared + 2) {
                         val args = stack.takeLast(declared)
@@ -324,10 +299,14 @@ private class EnumClassVisitor(
                         }
                     }
                     stack.clear()
-                } else if (opcode != Opcodes.INVOKESPECIAL) {
+                } else if (element.opcode() != Opcode.INVOKESPECIAL) {
                     stack.clear()
                 }
             }
+
+            else -> Unit
         }
     }
+
+    return entries.takeIf { it.isNotEmpty() }
 }
