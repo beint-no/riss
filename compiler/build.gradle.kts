@@ -13,7 +13,6 @@ kotlin {
 dependencies {
     implementation(project(":model"))
     implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
-    implementation("org.ow2.asm:asm:9.8")
     implementation("tools.jackson.core:jackson-databind:3.0.3")
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))
