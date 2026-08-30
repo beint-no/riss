@@ -11,16 +11,14 @@ import no.beint.riss.model.SecurityRequirement
 import no.beint.riss.model.SecurityScheme
 import no.beint.riss.model.Server
 import no.beint.riss.model.Tag
-import tools.jackson.databind.json.JsonMapper
 import java.math.BigDecimal
+import java.math.BigInteger
 
-/** Serializes the compiled document with Jackson 3. YAML is not a supported encoding. */
+/** Serializes the compiled document as compact JSON. YAML is not a supported encoding. */
 internal object OpenApiWriter {
-    private val mapper: JsonMapper = JsonMapper.builder().build()
+    fun write(document: OpenApi): ByteArray = writeString(document).toByteArray(Charsets.UTF_8)
 
-    fun write(document: OpenApi): ByteArray = mapper.writeValueAsBytes(tree(document))
-
-    fun writeString(document: OpenApi): String = mapper.writeValueAsString(tree(document))
+    fun writeString(document: OpenApi): String = CompactJsonWriter.write(tree(document))
 
     private fun tree(document: OpenApi): Map<String, Any> = obj(
         "openapi" to OpenApi.VERSION,
@@ -169,4 +167,90 @@ internal object OpenApiWriter {
     }
 
     private val NUMBER = Regex("-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?")
+}
+
+internal object CompactJsonWriter {
+    fun write(value: Any?): String = buildString { appendValue(value) }
+
+    private fun StringBuilder.appendValue(value: Any?) {
+        when (value) {
+            null -> append("null")
+            is String -> appendString(value)
+            is Boolean -> append(value)
+            is Byte, is Short, is Int, is Long, is BigInteger, is BigDecimal -> append(value)
+            is Float -> appendFinite(value.toDouble(), value)
+            is Double -> appendFinite(value, value)
+            is Map<*, *> -> appendObject(value)
+            is Iterable<*> -> appendArray(value)
+            else -> error("unsupported JSON value ${value::class.qualifiedName}")
+        }
+    }
+
+    private fun StringBuilder.appendFinite(number: Double, value: Number) {
+        require(number.isFinite()) { "JSON numbers must be finite" }
+        append(value)
+    }
+
+    private fun StringBuilder.appendObject(value: Map<*, *>) {
+        append('{')
+        var separator = false
+        value.entries.sortedBy { (key) ->
+            require(key is String) { "JSON object keys must be strings" }
+            key
+        }.forEach { (key, item) ->
+            if (separator) append(',') else separator = true
+            appendString(key as String)
+            append(':')
+            appendValue(item)
+        }
+        append('}')
+    }
+
+    private fun StringBuilder.appendArray(value: Iterable<*>) {
+        append('[')
+        var separator = false
+        value.forEach { item ->
+            if (separator) append(',') else separator = true
+            appendValue(item)
+        }
+        append(']')
+    }
+
+    private fun StringBuilder.appendString(value: String) {
+        append('"')
+        var index = 0
+        while (index < value.length) {
+            val character = value[index]
+            when (character) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\b' -> append("\\b")
+                '\u000c' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> when {
+                    character.code < 0x20 -> appendUnicodeEscape(character)
+                    character.isHighSurrogate() &&
+                        value.getOrNull(index + 1)?.isLowSurrogate() == true -> {
+                        append(character)
+                        append(value[++index])
+                    }
+                    character.isSurrogate() -> appendUnicodeEscape(character)
+                    else -> append(character)
+                }
+            }
+            index++
+        }
+        append('"')
+    }
+
+    private fun StringBuilder.appendUnicodeEscape(character: Char) {
+        append("\\u")
+        repeat(4) { shift ->
+            append(HEX[(character.code shr (12 - shift * 4)) and 0x0f])
+        }
+    }
+
+    private const val HEX = "0123456789abcdef"
 }
