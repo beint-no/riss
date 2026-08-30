@@ -10,7 +10,11 @@ import no.beint.riss.model.Schema
 import no.beint.riss.model.SecurityRequirement
 import no.beint.riss.model.SecurityScheme
 import no.beint.riss.model.Tag
+import java.math.BigDecimal
+import java.math.BigInteger
 import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -71,5 +75,34 @@ class OpenApiWriterTest {
         val json = OpenApiWriter.writeString(document)
         assertTrue(json.contains("\"3000\""))
         assertFalse(json.contains("\"example\" : 3000") || json.contains("\"example\": 3000"))
+    }
+
+    @Test
+    fun writesTheClosedJsonValueSetWithoutJackson() {
+        val value = linkedMapOf(
+            "text" to "quote \" slash \\ controls \b\u000c\n\r\t\u0001 emoji 😀",
+            "numbers" to listOf(-2, 3L, BigInteger("4"), BigDecimal("5.25"), 6.5),
+            "boolean" to true,
+            "nothing" to null,
+        )
+
+        assertEquals(
+            "{\"boolean\":true,\"nothing\":null,\"numbers\":[-2,3,4,5.25,6.5]," +
+                "\"text\":\"quote \\\" slash \\\\ controls \\b\\f\\n\\r\\t\\u0001 emoji 😀\"}",
+            CompactJsonWriter.write(value),
+        )
+        assertFailsWith<IllegalArgumentException> { CompactJsonWriter.write(Double.NaN) }
+    }
+
+    @Test
+    fun byteAndStringOutputAreIdenticalUtf8() {
+        val document = OpenApi.builder(Info("Blåbær 😀", "1", null, null))
+            .path(
+                "/n",
+                PathItem(mapOf("get" to Operation.builder("n").response("204", Response.of("No content")).build())),
+            )
+            .build()
+
+        assertEquals(OpenApiWriter.writeString(document), OpenApiWriter.write(document).decodeToString())
     }
 }
