@@ -26,7 +26,7 @@ import java.util.Map;
  */
 @RestController
 public class RissController {
-    private static final byte[] UI = loadUi();
+    private static final String UI = loadUi();
 
     private final List<SpecSet> specs;
     private final RissProperties properties;
@@ -100,7 +100,7 @@ public class RissController {
     }
 
     private ResponseEntity<byte[]> ui(SpecSet spec, String specPath) {
-        var html = new String(UI, StandardCharsets.UTF_8)
+        var html = UI
                 .replace("{{SPEC_PATH}}", specPath)
                 .replace("{{TITLE}}", spec.name());
         return ResponseEntity.ok()
@@ -168,12 +168,12 @@ public class RissController {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static byte[] loadUi() {
+    private static String loadUi() {
         try (InputStream in = RissController.class.getResourceAsStream("ui.html")) {
             if (in == null) {
                 throw new IllegalStateException("Missing Riss UI resource");
             }
-            return in.readAllBytes();
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to load Riss UI", exception);
         }

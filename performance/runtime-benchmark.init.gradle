@@ -1,0 +1,23 @@
+gradle.projectsEvaluated {
+    def spring = gradle.rootProject.project(':spring')
+    def sources = spring.sourceSets
+    def output = spring.layout.buildDirectory.dir('classes/runtimeBenchmark')
+    def compile = spring.tasks.register('compileRuntimeBenchmark', JavaCompile) {
+        source(spring.rootProject.file('performance/RissRuntimeBenchmark.java'))
+        classpath = sources.test.compileClasspath
+        destinationDirectory = output
+        javaCompiler = spring.javaToolchains.compilerFor(spring.java.toolchain)
+    }
+    spring.tasks.register('benchmarkRuntime', JavaExec) {
+        group = 'verification'
+        description = 'Measures explorer controller allocations and elapsed time in a local JVM'
+        dependsOn(compile, spring.tasks.named('classes'))
+        mainClass = 'no.beint.riss.spring.RissRuntimeBenchmark'
+        def baselineJar = spring.providers.gradleProperty('rissBenchmarkJar')
+        classpath = baselineJar.isPresent()
+                ? spring.files(baselineJar.get(), output, sources.test.runtimeClasspath)
+                : spring.files(output, sources.test.runtimeClasspath)
+        javaLauncher = spring.javaToolchains.launcherFor(spring.java.toolchain)
+        jvmArgs('-Xms256m', '-Xmx256m')
+    }
+}

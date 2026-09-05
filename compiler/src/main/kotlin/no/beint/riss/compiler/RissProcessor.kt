@@ -26,40 +26,43 @@ private class RissProcessor(
             validateConfiguration()
             AnnotationIndex.reset()
             val diagnostics = Diagnostics()
-            val enumReader = EnumReader(options.classpath, diagnostics)
-            val schemas = SchemaFactory(enumReader, diagnostics, options.strict)
-            val documentType = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).firstOrNull()
-            val documentAnnotation = documentType?.annotations?.firstOrNull { it.matches(Names.RISS_DOCUMENT) }
-            val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
-            val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
-            val excludePaths = documentAnnotation?.strings("excludePaths").orEmpty().ifEmpty { options.excludePaths }
-            val scanner = ControllerScanner(schemas, diagnostics, scanPackages, includePaths, excludePaths)
-            val functions = Names.mappings.keys
-                .asSequence()
-                .flatMap { resolver.getSymbolsWithAnnotation(it) }
-                .filterIsInstance<KSFunctionDeclaration>()
-                .distinct()
-            val operations = scanner.scan(functions)
-            if (operations.isEmpty()) {
-                diagnostics.error(
-                    "RISS-EMPTY",
-                    "no HTTP mappings found in ${scanPackages.ifEmpty { listOf("the compilation") }.joinToString()}",
-                    documentType,
-                )
-            }
-            val assembled = DocumentAssembler(resolver, enumReader, schemas, diagnostics, options).assemble(operations)
-            if (diagnostics.problems.isNotEmpty()) {
-                diagnostics.problems.forEach { problem ->
-                    logger.error(problem.message, problem.symbol)
+            EnumReader(options.classpath, diagnostics).use { enumReader ->
+                val schemas = SchemaFactory(enumReader, diagnostics, options.strict)
+                val documentType = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).firstOrNull()
+                val documentAnnotation = documentType?.annotations?.firstOrNull { it.matches(Names.RISS_DOCUMENT) }
+                val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
+                val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
+                val excludePaths = documentAnnotation?.strings("excludePaths").orEmpty().ifEmpty { options.excludePaths }
+                val scanner = ControllerScanner(schemas, diagnostics, scanPackages, includePaths, excludePaths)
+                val functions = Names.mappings.keys
+                    .asSequence()
+                    .flatMap { resolver.getSymbolsWithAnnotation(it) }
+                    .filterIsInstance<KSFunctionDeclaration>()
+                    .distinct()
+                val operations = scanner.scan(functions)
+                if (operations.isEmpty()) {
+                    diagnostics.error(
+                        "RISS-EMPTY",
+                        "no HTTP mappings found in ${scanPackages.ifEmpty { listOf("the compilation") }.joinToString()}",
+                        documentType,
+                    )
                 }
-                return emptyList()
+                val assembled = DocumentAssembler(resolver, enumReader, schemas, diagnostics, options).assemble(operations)
+                if (diagnostics.problems.isNotEmpty()) {
+                    diagnostics.problems.forEach { problem ->
+                        logger.error(problem.message, problem.symbol)
+                    }
+                    return emptyList()
+                }
+                SpecEmitter(codeGenerator, options.generatedPackage, options.registryName)
+                    .emit(assembled.document, assembled.specName, assembled.files)
             }
-            SpecEmitter(codeGenerator, options.generatedPackage, options.registryName)
-                .emit(assembled.document, assembled.specName, assembled.files)
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Riss compilation failed")
         } catch (exception: IllegalStateException) {
             logger.error(exception.message ?: "Riss compilation failed")
+        } finally {
+            AnnotationIndex.reset()
         }
         return emptyList()
     }

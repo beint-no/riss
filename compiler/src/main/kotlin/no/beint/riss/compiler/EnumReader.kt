@@ -21,10 +21,17 @@ internal data class EnumEntryValues(
 internal class EnumReader(
     private val classpath: List<Path>,
     private val diagnostics: Diagnostics,
-) {
-    private val loader: URLClassLoader? by lazy {
+) : AutoCloseable {
+    private val entriesByClass = mutableMapOf<String, List<EnumEntryValues>>()
+    private val lazyLoader = lazy {
         val urls = classpath.mapNotNull { path -> runCatching { path.toUri().toURL() }.getOrNull() }
         if (urls.isEmpty()) null else URLClassLoader(urls.toTypedArray(), ClassLoader.getPlatformClassLoader())
+    }
+    private val loader by lazyLoader
+
+    override fun close() {
+        if (lazyLoader.isInitialized()) loader?.close()
+        entriesByClass.clear()
     }
 
     fun values(
@@ -34,7 +41,9 @@ internal class EnumReader(
         whereValue: String?,
         location: String,
     ): List<String> {
-        val entries = read(enumClass, location) ?: return emptyList()
+        val entries = entriesByClass.getOrPut(enumClass.qualified()) {
+            read(enumClass, location) ?: return emptyList()
+        }
         val filtered = if (whereProperty.isNullOrBlank() || whereValue.isNullOrBlank()) {
             entries
         } else {
@@ -199,16 +208,18 @@ internal class EnumReader(
                 ?.parameters
                 ?.mapNotNull { it.name?.asString() }
                 .orEmpty()
+            val methods = type.methods
+            val accessors = parameterNames.mapNotNull { parameter ->
+                val getterName = "get${parameter.replaceFirstChar(Char::uppercaseChar)}"
+                val method = methods.firstOrNull { it.name == getterName && it.parameterCount == 0 }
+                    ?: methods.firstOrNull { it.name == parameter && it.parameterCount == 0 }
+                    ?: return@mapNotNull null
+                parameter to method
+            }
             constants.map { constant ->
                 val values = linkedMapOf<String, String>()
-                parameterNames.forEach { parameter ->
-                    val method = type.methods.firstOrNull { method ->
-                        method.name.equals("get${parameter.replaceFirstChar(Char::uppercaseChar)}", ignoreCase = false) &&
-                            method.parameterCount == 0
-                    } ?: type.methods.firstOrNull { method ->
-                        method.name == parameter && method.parameterCount == 0
-                    }
-                    val raw = method?.invoke(constant) ?: return@forEach
+                accessors.forEach { (parameter, method) ->
+                    val raw = method.invoke(constant) ?: return@forEach
                     values[parameter] = when (raw) {
                         is Enum<*> -> raw.name
                         else -> raw.toString()
