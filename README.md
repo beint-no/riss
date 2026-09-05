@@ -14,7 +14,7 @@ A process without Spring can load the compiled `SpecSet` through the service loa
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.8"
+    id("no.beint.riss") version "0.1.9"
 }
 ```
 
@@ -76,3 +76,15 @@ aliases are disabled by default to avoid conflicts with Springdoc or application
 - `spring`: JSON and UI endpoints
 - `gradle-plugin`: build integration
 - `example`: Spring Boot application used as the integration test
+
+## Swagger annotations
+
+The Gradle plugin supplies `swagger-annotations-jakarta` as a `compileOnly` dependency
+for existing `@Operation`, `@Schema`, `@Parameter`, and response documentation. Riss
+reads these annotations through KSP without linking its compiler or runtime to the
+Swagger package. They do not need to be shipped with the application. Keep them when
+migrating an existing documented API; removing them discards metadata that Riss
+cannot infer from controller signatures.
+
+See [the performance audit](performance/AUDIT.md) for the optimizations and measurements
+behind 0.1.9.

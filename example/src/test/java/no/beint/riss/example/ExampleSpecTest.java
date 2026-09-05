@@ -14,6 +14,7 @@ class ExampleSpecTest {
         assertTrue(compact.contains("\"openapi\":\"3.1.0\""));
         assertTrue(compact.contains("\"jsonSchemaDialect\":\"https://json-schema.org/draft/2020-12/schema\""));
         assertTrue(compact.contains("\"/api/features\""));
+        assertTrue(compact.contains("\"deprecated\":true"));
         assertTrue(compact.contains("\"/api/features/pages\""));
         assertTrue(compact.contains("\"/api/features/probes\""));
         assertTrue(compact.contains("\"CurrencyCode\""));

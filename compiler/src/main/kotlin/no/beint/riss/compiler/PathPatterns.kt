@@ -1,8 +1,10 @@
 package no.beint.riss.compiler
 
 internal object PathPatterns {
+    private val REPEATED_SLASHES = Regex("/+")
+
     fun combine(prefix: String, path: String): String {
-        val joined = "/${prefix.trim('/')}/${path.trim('/')}".replace(Regex("/+"), "/")
+        val joined = "/${prefix.trim('/')}/${path.trim('/')}".replace(REPEATED_SLASHES, "/")
         return if (joined.length > 1) joined.trimEnd('/') else joined
     }
 

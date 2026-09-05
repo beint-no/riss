@@ -1,5 +1,7 @@
 package no.beint.riss.example
 
+import kotlin.Deprecated as Legacy
+
 import com.fasterxml.jackson.annotation.JsonValue
 import io.swagger.v3.oas.annotations.Operation
 import io.swagger.v3.oas.annotations.media.Schema
@@ -142,6 +144,10 @@ sealed interface ProbeResult {
 @RequestMapping("/api/features")
 @Tag(name = "Features", description = "Example features")
 class FeatureApi {
+    @Legacy("Use list instead")
+    @GetMapping("/legacy")
+    fun legacy(): List<FeatureRes> = emptyList()
+
     @GetMapping
     fun list(@Valid @ParameterObject filter: FeatureFilter?): List<FeatureRes> = emptyList()
 

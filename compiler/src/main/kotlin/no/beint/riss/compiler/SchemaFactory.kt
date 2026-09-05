@@ -27,6 +27,7 @@ internal class SchemaFactory(
     private val components = linkedMapOf<String, Schema>()
     private val names = linkedMapOf<String, String>()
     private val inProgress = mutableSetOf<String>()
+    private val jsonValueTypes = java.util.IdentityHashMap<KSClassDeclaration, KSType?>()
 
     fun components(): Map<String, Schema> = components.toMap()
 
@@ -532,6 +533,11 @@ internal class SchemaFactory(
     }
 
     private fun jsonValueType(declaration: KSClassDeclaration): KSType? {
+        if (jsonValueTypes.containsKey(declaration)) return jsonValueTypes[declaration]
+        return readJsonValueType(declaration).also { jsonValueTypes[declaration] = it }
+    }
+
+    private fun readJsonValueType(declaration: KSClassDeclaration): KSType? {
         declaration.getDeclaredProperties().forEach { property ->
             if (hasJsonValue(property) || property.getter?.let(::hasJsonValue) == true) {
                 return property.type.resolve()

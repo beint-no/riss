@@ -128,5 +128,70 @@ integration test.
    `model` dependency is unused by its implementation, but removing it changes the
    classpath exposed to consumers. It is small and not an immediate performance win.
 
-The library must be released and ReAI's Riss version updated before production gains
-these changes. This audit does not change ReAI dependencies or deploy an application.
+The first pass above was followed by the release audit below. Consumer adoption is
+tracked separately from the library measurements.
+
+
+## Second pass and 0.1.9 release
+
+The release adds these further changes:
+
+- Keep the explorer's static HTML as pre-encoded UTF-8 segments. Each request encodes
+  only its path and copies the static segments into one response buffer. There is no
+  cache of request paths, contexts, or responses.
+- Cache `@JsonValue` type discovery, including negative results, inside each schema
+  factory. Repeated references to the same DTO no longer scan its members each time.
+- Index flattened query-object properties once and reuse fixed regular expressions
+  for route and display-name processing.
+- Make Swagger annotations compile-only in the example application, matching the
+  Gradle plugin and real consumers.
+
+`./gradlew clean build` passes all 33 tests for the release candidate, including
+application startup with Swagger absent from the example runtime.
+
+A proposed shortcut that skipped resolving annotations with an unexpected short name
+was rejected: it broke `import kotlin.Deprecated as Legacy`. The existing resolution
+behavior is retained, with an aliased-annotation regression fixture.
+
+The explorer now allocates about **22 KB/request**, versus 124 KB after the first pass
+and 225 KB originally: roughly **90% less than the original**. The same direct-controller
+harness measured 1.39–1.46 µs/request locally. Allocation is the stronger evidence;
+network and servlet overhead remain outside this benchmark. Complete HTML bytes are
+checked against template substitution for single and multiple documents, ordinary
+context paths, Unicode paths, and already percent-encoded paths. Existing application
+integration checks cover servlet mappings and forwarded prefixes.
+
+The current consumer comparison used ReAI `785cb1e6d` and Utin `3621bb95`, with their
+prebuilt dependency classpaths:
+
+| Document | Operations | Bytes | Final vs first audit pass | Final vs published 0.1.8 |
+| --- | ---: | ---: | --- | --- |
+| ReAI public | 472 | 1,115,364 | Byte-for-byte identical | Identical parsed JSON |
+| ReAI site | 10 | 28,780 | Byte-for-byte identical | Identical parsed JSON |
+| Utin public | 207 | 768,500 | Byte-for-byte identical | Identical parsed JSON |
+
+The published 0.1.8 comparison differs only in JSON object-key ordering. Main already
+contained an unreleased replacement of Jackson with the deterministic JSON writer,
+and of ASM with the JDK Class-File API. Those changes are included in 0.1.9. Spec ETags
+will change on upgrade; document data is preserved.
+
+Six alternating first-pass/final compiler runs used copied processor JARs, the same
+consumer sources and dependencies, clean consumer outputs, `--no-build-cache`, and
+`--no-parallel`. Every generated document matched the first-pass bytes. Timing ranges
+still overlapped substantially (ReAI public: 3.21–10.30 s first pass, 3.24–6.15 s final;
+Utin: 2.48–8.83 s first pass, 2.60–5.20 s final), so no additional compiler percentage
+speedup is claimed. The retained changes remove redundant work with small,
+compilation-scoped memory use and preserve the document contract.
+
+### Swagger dependency decision
+
+Keep support in this release. The annotations JAR is 50,578 bytes and has no runtime
+role in Riss. ReAI imports these annotations in 162 source files and Utin in 61.
+ReAI's existing application JAR does not contain Swagger. Riss's compiler uses KSP
+symbols and annotation names, rather than linking against Swagger classes.
+
+Removing the plugin's automatic compile-only dependency would break compilation of
+existing consumers. Replacing every annotation would require new Riss annotations
+for metadata that signatures do not express, plus a broad migration. That offers
+little performance benefit and clear compatibility/maintenance costs. The useful
+runtime dependency removal is already achieved by keeping the package compile-only.

@@ -4,7 +4,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import no.beint.riss.SpecSet;
 import no.beint.riss.SpecSets;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -14,6 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +26,8 @@ import java.util.Map;
  */
 @RestController
 public class RissController {
-    private static final String UI = loadUi();
+    private static final byte[][] UI = loadUi();
+    private static final int UI_SIZE = Arrays.stream(UI).mapToInt(part -> part.length).sum();
 
     private final List<SpecSet> specs;
     private final RissProperties properties;
@@ -63,7 +64,7 @@ public class RissController {
             return ResponseEntity.notFound().build();
         }
         if (specs.size() == 1) {
-            return ui(specs.getFirst(), RissRequestPath.resolve(request, "/openapi"));
+            return ui(RissRequestPath.resolve(request, "/openapi"));
         }
         return catalogUi(request);
     }
@@ -87,7 +88,7 @@ public class RissController {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> ui(spec, RissRequestPath.resolve(request, "/openapi/" + spec.name())))
+                .map(spec -> ui(RissRequestPath.resolve(request, "/openapi/" + spec.name())))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -99,15 +100,23 @@ public class RissController {
         return bytes(spec.json(), etags.get(spec.name()), ifNoneMatch);
     }
 
-    private ResponseEntity<byte[]> ui(SpecSet spec, String specPath) {
-        var html = UI
-                .replace("{{SPEC_PATH}}", specPath)
-                .replace("{{TITLE}}", spec.name());
+    private ResponseEntity<byte[]> ui(String specPath) {
+        var path = specPath.getBytes(StandardCharsets.UTF_8);
+        var body = new byte[UI_SIZE + path.length * (UI.length - 1)];
+        var offset = 0;
+        for (var index = 0; index < UI.length; index++) {
+            if (index > 0) {
+                System.arraycopy(path, 0, body, offset, path.length);
+                offset += path.length;
+            }
+            System.arraycopy(UI[index], 0, body, offset, UI[index].length);
+            offset += UI[index].length;
+        }
         return ResponseEntity.ok()
                 .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
                 .header(HttpHeaders.CACHE_CONTROL, "no-cache")
                 .header("X-Content-Type-Options", "nosniff")
-                .body(html.getBytes(StandardCharsets.UTF_8));
+                .body(body);
     }
 
     private ResponseEntity<byte[]> catalog(HttpServletRequest request, String ifNoneMatch) {
@@ -168,12 +177,14 @@ public class RissController {
         return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
-    private static String loadUi() {
+    private static byte[][] loadUi() {
         try (InputStream in = RissController.class.getResourceAsStream("ui.html")) {
             if (in == null) {
                 throw new IllegalStateException("Missing Riss UI resource");
             }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return Arrays.stream(new String(in.readAllBytes(), StandardCharsets.UTF_8).split("\\Q{{SPEC_PATH}}\\E", -1))
+                    .map(part -> part.getBytes(StandardCharsets.UTF_8))
+                    .toArray(byte[][]::new);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to load Riss UI", exception);
         }

@@ -4,10 +4,13 @@ import no.beint.riss.SpecSet;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -50,6 +53,33 @@ class RissControllerTest {
                         throw new AssertionError(body);
                     }
                 });
+    }
+
+    @Test
+    void explorerPreservesEveryTemplateByteAcrossRequestPrefixes() throws Exception {
+        String template;
+        try (var resource = RissController.class.getResourceAsStream("ui.html")) {
+            template = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        var prefixes = Map.of(
+                "", "",
+                "/demo", "/demo",
+                "/café", "/caf%C3%A9",
+                "/caf%C3%A9", "/caf%C3%A9"
+        );
+        var single = new RissController(List.of(spec("public", PUBLIC_JSON)), new RissProperties());
+        var multiple = new RissController(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)), new RissProperties());
+        for (var prefix : prefixes.entrySet()) {
+            var request = new MockHttpServletRequest();
+            request.setContextPath(prefix.getKey());
+            for (var endpoint : List.of("/openapi", "/openapi/public")) {
+                var response = endpoint.equals("/openapi") ? single.ui(request) : multiple.namedUi("public", request);
+                assertArrayEquals(
+                        template.replace("{{SPEC_PATH}}", prefix.getValue() + endpoint).getBytes(StandardCharsets.UTF_8),
+                        response.getBody()
+                );
+            }
+        }
     }
 
     @Test
