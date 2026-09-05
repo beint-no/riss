@@ -14,13 +14,12 @@ directory and supply an ordinary Java build; its only integration contract is JS
 
 ## Build and compile
 
-MCP is currently available from source on `main`; it was added after the 0.1.9
-release. These commands use the repository's current build version, and do not
-imply that the new artifact was included in the published 0.1.9 release.
+MCP is available as `no.beint.riss:mcp:0.1.10`. It was added after the 0.1.9
+release and is not part of that older release.
 
 ```sh
 ./gradlew :mcp:build
-java -jar mcp/build/libs/mcp-0.1.9.jar compile \
+java -jar mcp/build/libs/mcp-0.1.10.jar compile \
   --spec /path/to/openapi.json \
   --out /path/to/build/mcp/catalog.json
 ```
@@ -170,6 +169,12 @@ executors must preserve the host application's validation and authorization boun
 `McpRuntime.handle` is transport-independent. `McpServer` and `McpStdio` own transport
 framing and concurrency. No Spring auto-configuration or background process is
 installed merely by depending on the module.
+
+An application hosting multiple users can call `handle(body, headers, executor)`
+with an executor scoped to that authenticated request. The runtime shares its
+immutable catalog and encoded discovery pages; it never stores the supplied
+executor or credentials. The host owns authentication, authorization, consent and
+credential storage. The standalone CLI retains its single upstream identity.
 
 ## Protocol and limits
 
