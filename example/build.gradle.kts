@@ -17,7 +17,7 @@ dependencies {
     implementation(project(":spring"))
     implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.0")
     implementation("org.springframework.boot:spring-boot-starter-validation:4.1.0")
-    implementation("io.swagger.core.v3:swagger-annotations-jakarta:2.2.38")
+    compileOnly("io.swagger.core.v3:swagger-annotations-jakarta:2.2.38")
     ksp(project(":compiler"))
 
     testImplementation(platform("org.junit:junit-bom:6.0.3"))

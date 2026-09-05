@@ -302,6 +302,7 @@ internal class ControllerScanner(
             return emptyList()
         }
         val constructor = declaration.primaryConstructor
+        val properties = declaration.getDeclaredProperties().associateBy { it.simpleName.asString() }
         val source: List<Pair<KSAnnotated, KSType>> =
             if (constructor != null && constructor.parameters.isNotEmpty()) {
                 constructor.parameters.mapNotNull { value ->
@@ -309,7 +310,7 @@ internal class ControllerScanner(
                     value to value.type.resolve()
                 }
             } else {
-                declaration.getDeclaredProperties().map { property ->
+                properties.values.map { property ->
                     property to property.type.resolve()
                 }.toList()
             }
@@ -327,8 +328,7 @@ internal class ControllerScanner(
             val sources = listOfNotNull(
                 annotated,
                 (annotated as? KSValueParameter)?.let { value ->
-                    declaration.getDeclaredProperties()
-                        .firstOrNull { it.simpleName.asString() == value.name?.asString() }
+                    properties[value.name?.asString()]
                 },
             )
             val swagger = sources.firstNotNullOfOrNull { it.annotation(Names.SWAGGER_SCHEMA) }
@@ -513,7 +513,7 @@ internal class ControllerScanner(
     }
 
     private fun pathVariableNames(path: String): Set<String> =
-        Regex("""\{([^}?*:]+)[^}]*}""")
+        PATH_VARIABLES
             .findAll(path)
             .map { it.groupValues[1] }
             .toSet()
@@ -529,7 +529,7 @@ internal class ControllerScanner(
         }
 
     private fun humanize(name: String): String =
-        name.replace(Regex("([a-z])([A-Z])"), "$1 $2")
+        name.replace(CAMEL_CASE_BOUNDARY, "$1 $2")
             .replace('_', ' ')
             .lowercase()
             .replaceFirstChar(Char::uppercaseChar)
@@ -558,6 +558,8 @@ internal class ControllerScanner(
     )
 
     private companion object {
+        val PATH_VARIABLES = Regex("""\{([^}?*:]+)[^}]*}""")
+        val CAMEL_CASE_BOUNDARY = Regex("([a-z])([A-Z])")
         val VOID_TYPES = setOf(
             "kotlin.Unit",
             "java.lang.Void",

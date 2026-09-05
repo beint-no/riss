@@ -87,10 +87,12 @@ internal object Names {
 }
 
 internal object AnnotationIndex {
-    private val cache = java.util.IdentityHashMap<KSAnnotated, Map<String, List<KSAnnotation>>>()
+    private val cache = ThreadLocal.withInitial {
+        java.util.IdentityHashMap<KSAnnotated, Map<String, List<KSAnnotation>>>()
+    }
 
     fun reset() {
-        cache.clear()
+        cache.remove()
     }
 
     fun find(host: KSAnnotated, qualifiedName: String): KSAnnotation? = matching(host, qualifiedName).firstOrNull()
@@ -112,7 +114,7 @@ internal object AnnotationIndex {
     }
 
     private fun index(host: KSAnnotated): Map<String, List<KSAnnotation>> =
-        cache.getOrPut(host) { host.annotations.groupBy { it.shortName.asString() } }
+        cache.get().getOrPut(host) { host.annotations.groupBy { it.shortName.asString() } }
 }
 
 internal fun KSAnnotation.matches(qualifiedName: String): Boolean =

@@ -55,13 +55,17 @@ internal class DocumentAssembler(
         val info = info(declared, documentAnnotation)
         val paths = linkedMapOf<String, PathItem>()
         val tags = linkedMapOf<String, Tag>()
+        val headers = headers(declared)
+        val defaultResponses = defaultResponses(declared).groupBy { it.code }.mapValues { (_, extras) ->
+            mergeResponses(extras)
+        }
         operations.sortedWith(compareBy({ it.path }, { it.method })).forEach { scanned ->
-            applyGlobals(scanned, declared)
+            applyGlobals(scanned, headers, defaultResponses)
             val existing = paths[scanned.path]
             paths[scanned.path] = existing?.with(scanned.method, scanned.operation)
                 ?: PathItem(mapOf(scanned.method.lowercase() to scanned.operation))
             scanned.operation.tags().forEach { name ->
-                tags.putIfAbsent(name, Tag(name, tagDescription(declared, scanned.controller, name)))
+                tags.getOrPut(name) { Tag(name, tagDescription(declared, scanned.controller, name)) }
             }
         }
         addNamedSchemas(declared)
@@ -95,18 +99,20 @@ internal class DocumentAssembler(
         return Info(title, version, description, contact)
     }
 
-    private fun applyGlobals(scanned: ScannedOperation, declared: KSClassDeclaration?) {
+    private fun applyGlobals(
+        scanned: ScannedOperation,
+        headers: List<GlobalHeader>,
+        defaultResponses: Map<String, Response>,
+    ) {
         var operation = scanned.operation
-        headers(declared).forEach { header ->
+        headers.forEach { header ->
             if (header.appliesTo(scanned.controller) && operation.parameters().none { it.name() == header.name && it.locatedIn() == "header" }) {
-                operation = operation.withParameters(operation.parameters() + header.parameter())
+                operation = operation.withParameters(operation.parameters() + header.parameter)
             }
         }
         val responses = LinkedHashMap(operation.responses())
-        defaultResponses(declared).groupBy { it.code }.forEach { (code, extras) ->
-            if (!responses.containsKey(code)) {
-                responses[code] = mergeResponses(extras)
-            }
+        defaultResponses.forEach { (code, response) ->
+            responses.putIfAbsent(code, response)
         }
         scanned.operation = operation.withResponses(responses)
     }
@@ -333,10 +339,10 @@ internal class DocumentAssembler(
             return skipPackages.none { pkg == it || pkg.startsWith("$it.") }
         }
 
-        fun parameter(): Parameter {
-            val schema = Schema.builder().type(type).format(format).build()
-            return Parameter(name, "header", description, required, schema, null, null, null)
-        }
+        val parameter = Parameter(
+            name, "header", description, required,
+            Schema.builder().type(type).format(format).build(), null, null, null,
+        )
     }
 
     private data class DefaultResponse(

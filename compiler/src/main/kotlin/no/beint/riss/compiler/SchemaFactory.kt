@@ -27,6 +27,7 @@ internal class SchemaFactory(
     private val components = linkedMapOf<String, Schema>()
     private val names = linkedMapOf<String, String>()
     private val inProgress = mutableSetOf<String>()
+    private val jsonValueTypes = java.util.IdentityHashMap<KSClassDeclaration, KSType?>()
 
     fun components(): Map<String, Schema> = components.toMap()
 
@@ -278,15 +279,18 @@ internal class SchemaFactory(
     private fun ownProperties(declaration: KSClassDeclaration): List<PropertyModel> {
         val constructor = declaration.primaryConstructor
         if (constructor != null && constructor.parameters.isNotEmpty()) {
+            val properties = declaration.getDeclaredProperties().associateBy { it.simpleName.asString() }
             return constructor.parameters.mapNotNull { parameter ->
                 val rawName = parameter.name?.asString() ?: return@mapNotNull null
-                val sources = annotationSources(declaration, parameter)
+                val property = properties[rawName]
+                val sources = listOfNotNull(parameter, property, property?.getter)
                 val name = jsonName(sources, rawName)
                 if (sources.any(::ignored) || ignoredName(name)) return@mapNotNull null
+                val type = parameter.type.resolve()
                 PropertyModel(
                     name = name,
-                    type = parameter.type.resolve(),
-                    required = required(sources, parameter.type.resolve(), parameter),
+                    type = type,
+                    required = required(sources, type, parameter),
                     annotated = sources,
                 )
             }
@@ -300,11 +304,6 @@ internal class SchemaFactory(
             val type = property.type.resolve()
             PropertyModel(name, type, required(sources, type, null), sources)
         }.toList()
-    }
-
-    private fun annotationSources(owner: KSClassDeclaration, parameter: KSValueParameter): List<KSAnnotated> {
-        val property = owner.getDeclaredProperties().firstOrNull { it.simpleName.asString() == parameter.name?.asString() }
-        return listOfNotNull(parameter, property, property?.getter)
     }
 
     private fun required(sources: List<KSAnnotated>, type: KSType, parameter: KSValueParameter?): Boolean {
@@ -534,6 +533,11 @@ internal class SchemaFactory(
     }
 
     private fun jsonValueType(declaration: KSClassDeclaration): KSType? {
+        if (jsonValueTypes.containsKey(declaration)) return jsonValueTypes[declaration]
+        return readJsonValueType(declaration).also { jsonValueTypes[declaration] = it }
+    }
+
+    private fun readJsonValueType(declaration: KSClassDeclaration): KSType? {
         declaration.getDeclaredProperties().forEach { property ->
             if (hasJsonValue(property) || property.getter?.let(::hasJsonValue) == true) {
                 return property.type.resolve()
