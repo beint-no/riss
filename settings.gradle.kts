@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 rootProject.name = "riss"
 
 include("model", "runtime", "compiler", "spring", "gradle-plugin", "example")
+include("mcp")

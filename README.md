@@ -1,6 +1,8 @@
 # Riss
 
-Riss compiles a Spring MVC API into an OpenAPI 3.1 JSON document. A public-contract
+Riss provides independent OpenAPI and MCP implementations for JVM APIs.
+
+Its OpenAPI compiler turns a Spring MVC API into an OpenAPI 3.1 JSON document. A public-contract
 mistake fails the application build. The runtime serves the compiled bytes and a
 small HTML explorer. It does not ship Swagger UI, Scalar, swagger-core, or Jackson 2.
 
@@ -8,6 +10,11 @@ The name is Norwegian *riss*: an outline.
 
 Riss requires JDK 26. Its MVC adapter targets Spring Framework 7 and Spring Boot 4.
 A process without Spring can load the compiled `SpecSet` through the service loader.
+
+The independent [MCP module](mcp/README.md) compiles an OpenAPI document into a tools
+server using only the JDK. It reuses the existing API contract and calls the existing
+HTTP endpoints, preserving application authentication and validation. OpenAPI users
+do not acquire MCP dependencies, processing, endpoints, or configuration.
 
 ## Use
 
@@ -75,6 +82,7 @@ aliases are disabled by default to avoid conflicts with Springdoc or application
 - `compiler`: KSP processor. Emits deterministic compact JSON without runtime dependencies
 - `spring`: JSON and UI endpoints
 - `gradle-plugin`: build integration
+- `mcp`: independent, dependency-free MCP compiler, runtime, HTTP and stdio transports
 - `example`: Spring Boot application used as the integration test
 
 ## Swagger annotations
