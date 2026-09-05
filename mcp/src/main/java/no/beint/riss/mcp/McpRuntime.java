@@ -89,13 +89,18 @@ public final class McpRuntime {
 
     /** Null headers select stdio; HTTP headers must be supplied without combining duplicate values. */
     public Reply handle(byte[] requestBytes, Map<String, String> headers) {
-        var reply = process(requestBytes, headers);
+        return handle(requestBytes, headers, executor);
+    }
+
+    /** Uses a request-scoped executor while sharing the immutable catalog and encoded discovery pages. */
+    public Reply handle(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor) {
+        var reply = process(requestBytes, headers, java.util.Objects.requireNonNull(requestExecutor));
         if (headers != null) for (var entry : headers.entrySet())
             if (entry.getKey().equalsIgnoreCase("MCP-Protocol-Version")) return reply.forVersion(entry.getValue());
         return reply;
     }
 
-    private Reply process(byte[] requestBytes, Map<String, String> headers) {
+    private Reply process(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor) {
         if (requestBytes.length > maxRequestBytes) return error(413, null, -32600, "Request exceeds byte limit");
         Object parsed;
         try { parsed = Json.parse(requestBytes); }
@@ -139,7 +144,7 @@ public final class McpRuntime {
                         "capabilities", capabilities(), "_meta", Json.map("io.modelcontextprotocol/serverInfo", info), "ttlMs", 3600000, "cacheScope", "private"));
                 case "ping" -> result(id, Json.map("resultType", "complete"));
                 case "tools/list" -> list(id, params);
-                case "tools/call" -> call(id, params);
+                case "tools/call" -> call(id, params, requestExecutor);
                 default -> error(CURRENT.equals(version) && headers != null ? 404 : 200, id, -32601, "Method not found");
             };
         } catch (IllegalArgumentException e) {
@@ -171,7 +176,7 @@ public final class McpRuntime {
         return new Reply(200, response);
     }
 
-    private Reply call(Object id, Map<String, Object> params) {
+    private Reply call(Object id, Map<String, Object> params, McpExecutor requestExecutor) {
         var name = Json.string(params.get("name"));
         var tool = tools.get(name);
         if (tool == null) return error(200, id, -32602, "Unknown tool: " + name);
@@ -181,7 +186,7 @@ public final class McpRuntime {
         try { request = tool.request(Json.objectOrEmpty(params.get("arguments")), maxRequestBytes); }
         catch (IllegalArgumentException e) { return toolError(id, e.getMessage()); }
         try {
-            var response = executor.execute(request);
+            var response = requestExecutor.execute(request);
             if (response.status() < 200 || response.status() >= 300) {
                 String detail = switch (response.status()) {
                     case 401 -> "API authentication failed";

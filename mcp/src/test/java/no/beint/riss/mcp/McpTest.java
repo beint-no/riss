@@ -44,6 +44,7 @@ public final class McpTest {
         multipart();
         protocol();
         pagingAndConcurrency();
+        requestExecutors();
         http();
         stdio();
         System.out.println("Passed " + checks + " MCP checks (JDK only)");
@@ -66,6 +67,26 @@ public final class McpTest {
             }
             equal(Json.parse(Json.bytes(string.toString())), string.toString());
         }
+    }
+
+    private static void requestExecutors() throws Exception {
+        var runtime = new McpRuntime(McpCompiler.compile(SPEC).catalog(), _ -> {
+            throw new AssertionError("Request-scoped call used the default executor");
+        });
+        var request = rpc("tools/call", Json.map("name", "getItem", "arguments", Json.map("path", Json.map("id", "1"))));
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var pending = new ArrayList<java.util.concurrent.Future<String>>();
+            for (int i = 0; i < 100; i++) {
+                var identity = "user-" + i;
+                pending.add(pool.submit(() -> {
+                    var reply = result(runtime.handle(request, Map.of(), _ ->
+                            new McpResponse(200, "application/json", Json.bytes(Json.map("name", identity)))));
+                    return Json.string(Json.object(Json.object(reply.get("structuredContent")).get("result")).get("name"));
+                }));
+            }
+            for (int i = 0; i < pending.size(); i++) equal(pending.get(i).get(), "user-" + i);
+        }
+        equal(runtime.toolCount(), 2);
     }
 
     private static void compiler() {
