@@ -25,6 +25,8 @@ public final class McpRuntime {
     private final McpExecutor executor;
     private final int maxRequestBytes;
 
+    public enum ToolListing { COMPLETE, PAGINATED }
+
     public static final class Reply {
         private final int status;
         private final byte[] body;
@@ -48,6 +50,15 @@ public final class McpRuntime {
     }
 
     public McpRuntime(byte[] catalogBytes, McpExecutor executor, int maxRequestBytes) {
+        this(catalogBytes, executor, maxRequestBytes, ToolListing.COMPLETE);
+    }
+
+    public McpRuntime(byte[] catalogBytes, McpExecutor executor, ToolListing toolListing) {
+        this(catalogBytes, executor, MAX_REQUEST_BYTES, toolListing);
+    }
+
+    public McpRuntime(byte[] catalogBytes, McpExecutor executor, int maxRequestBytes, ToolListing toolListing) {
+        java.util.Objects.requireNonNull(toolListing);
         if (maxRequestBytes < 1024 || maxRequestBytes > 64 * 1024 * 1024) throw new IllegalArgumentException("Request limit must be between 1 KiB and 64 MiB");
         this.maxRequestBytes = maxRequestBytes;
         if (catalogBytes.length > 64 * 1024 * 1024) throw new IllegalArgumentException("Catalog exceeds 64 MiB");
@@ -63,7 +74,7 @@ public final class McpRuntime {
             var tool = new CompiledTool(value);
             if (toolMap.putIfAbsent(tool.name, tool) != null) throw new IllegalArgumentException("Duplicate tool: " + tool.name);
             int toolSize = Json.bytes(tool.definition).length;
-            if (!chunk.isEmpty() && (size + toolSize > 128 * 1024 || chunk.size() >= 32)) {
+            if (toolListing == ToolListing.PAGINATED && !chunk.isEmpty() && (size + toolSize > 128 * 1024 || chunk.size() >= 32)) {
                 chunks.add(chunk);
                 chunk = new ArrayList<>();
                 size = 0;

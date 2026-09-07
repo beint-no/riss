@@ -14,12 +14,12 @@ directory and supply an ordinary Java build; its only integration contract is JS
 
 ## Build and compile
 
-MCP is available as `no.beint.riss:mcp:0.1.10`. It was added after the 0.1.9
+MCP is available as `no.beint.riss:mcp:0.1.11`. It was added after the 0.1.9
 release and is not part of that older release.
 
 ```sh
 ./gradlew :mcp:build
-java -jar mcp/build/libs/mcp-0.1.10.jar compile \
+java -jar mcp/build/libs/mcp-0.1.11.jar compile \
   --spec /path/to/openapi.json \
   --out /path/to/build/mcp/catalog.json
 ```
@@ -50,6 +50,9 @@ are reported to stderr and excluded. `--read-only true` selects GET, HEAD, and
 OPTIONS; review endpoint behavior before treating HTTP method selection as a
 guarantee of no side effects. The compiler does not invent tool safety hints.
 Explicit boolean hints may be supplied in an operation's `x-mcp-annotations` object.
+Generic summaries such as `Get` or `List` are qualified with the API path in tool
+titles and descriptions so clients can distinguish their resources. Descriptive
+summaries are preserved.
 
 ## Connect an MCP client
 
@@ -195,8 +198,13 @@ Library callers can supply request/response limits and an upstream timeout direc
 JSON parsing rejects malformed UTF-8, duplicate object keys, excessive nesting,
 and unbounded numeric representations.
 
-Tool pages are pre-encoded once, capped at 32 tools and approximately 128 KiB per
-page (a single larger tool occupies its own page). Cursors are tied to the catalog
+Tool discovery is pre-encoded once and returns the complete catalog by default.
+This supports clients that only request the first `tools/list` page. The current
+ReAI catalog has 485 tools and approximately 1.5 MB of tool definitions.
+Library callers whose clients support pagination can pass
+`McpRuntime.ToolListing.PAGINATED` to the runtime constructor. That mode caps pages
+at 32 tools and approximately 128 KiB (a single larger tool occupies its own page).
+Cursors are tied to the catalog
 digest, so cursors from a different build fail clearly. Catalogs are immutable for
 the lifetime of a runtime; restart with a newly compiled catalog to update tools.
 
