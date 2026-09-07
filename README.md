@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.9"
+    id("no.beint.riss") version "0.1.11"
 }
 ```
 
