@@ -279,7 +279,8 @@ internal class ControllerScanner(
             schemas.schema(type, "$location.$name", parameter),
             style(swagger),
             explode(swagger),
-            swagger?.string("example") ?: annotation?.string("defaultValue"),
+            swagger?.string("example")
+                ?: annotation?.string("defaultValue")?.takeUnless { it == Names.SPRING_DEFAULT_NONE },
         )
     }
 
