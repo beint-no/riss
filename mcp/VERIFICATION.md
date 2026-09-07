@@ -91,8 +91,10 @@ JDK management API. These numbers measure the protocol engine and its response
 buffer, excluding transport, upstream HTTP, and application/database work. They
 are not an end-to-end latency guarantee or a comparison against another SDK.
 
-Catalog pages are encoded once. Per-request work is a bounded JSON parse, a cursor
-lookup, and one response buffer containing the request ID plus cached page bytes.
+The measurements above describe the earlier paginated discovery implementation.
+Complete discovery now encodes all tool definitions once. Per-request work is a
+bounded JSON parse and one response buffer containing the request ID plus the
+cached tool definitions; response allocation scales with the full catalog.
 Tool calls use a pooled JDK HTTP client and virtual threads. A call makes one
 upstream HTTP request so the application's existing validation and authorization
 pipeline runs; no controller reflection or second annotation scan is introduced.

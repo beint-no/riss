@@ -4,7 +4,7 @@ A build-time OpenAPI-to-MCP compiler and a small tools server. Requires JDK 26.
 There are **no dependencies**, including on other Riss modules or test libraries.
 
 The module accepts an OpenAPI 3.1 JSON document and emits a portable tool catalog.
-At runtime it loads that catalog, serves discovery from pre-encoded pages, and turns
+At runtime it loads that catalog, serves pre-encoded tool discovery, and turns
 tool arguments into requests to a fixed API origin. It never scans application
 classes, resolves annotations, downloads schemas, or parses OpenAPI at runtime.
 
@@ -175,7 +175,7 @@ installed merely by depending on the module.
 
 An application hosting multiple users can call `handle(body, headers, executor)`
 with an executor scoped to that authenticated request. The runtime shares its
-immutable catalog and encoded discovery pages; it never stores the supplied
+immutable catalog and encoded tool discovery; it never stores the supplied
 executor or credentials. The host owns authentication, authorization, consent and
 credential storage. The standalone CLI retains its single upstream identity.
 
@@ -198,16 +198,11 @@ Library callers can supply request/response limits and an upstream timeout direc
 JSON parsing rejects malformed UTF-8, duplicate object keys, excessive nesting,
 and unbounded numeric representations.
 
-Tool discovery is pre-encoded once and paginated by default, with pages capped at
-32 tools and approximately 128 KiB (a single larger tool occupies its own page).
-Library callers supporting clients that do not follow discovery cursors can
-explicitly pass `McpRuntime.ToolListing.COMPLETE` to the runtime constructor.
-That mode returns the entire catalog without a continuation cursor. Check the
-complete response size against the consuming clients' limits before enabling it.
-The existing constructors and standalone CLI retain paginated discovery.
-Cursors are tied to the catalog
-digest, so cursors from a different build fail clearly. Catalogs are immutable for
-the lifetime of a runtime; restart with a newly compiled catalog to update tools.
+Tool discovery is pre-encoded once and returns all tool definitions in one response,
+without a continuation cursor or configuration option. This supports clients that
+only request `tools/list` once. ReAI's 485-tool catalog is approximately 1.5 MB and
+was verified with Codex. Catalogs remain limited to 64 MiB and immutable for the
+lifetime of a runtime; restart with a newly compiled catalog to update tools.
 
 See [verification and measurements](VERIFICATION.md) for the checked consumer
 contracts, live integration coverage, and reproducible performance harness.

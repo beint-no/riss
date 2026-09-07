@@ -2,30 +2,24 @@ package no.beint.riss.mcp;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Base64;
-import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Thread-safe, stateless tools protocol engine. Catalog pages are encoded once at construction. */
+/** Thread-safe, stateless tools protocol engine. Tool discovery is encoded once at construction. */
 public final class McpRuntime {
     public static final List<String> PROTOCOL_VERSIONS = List.of("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26");
     public static final int MAX_REQUEST_BYTES = 1024 * 1024;
     private static final String CURRENT = PROTOCOL_VERSIONS.getFirst();
     private static final String VERSION_META = "io.modelcontextprotocol/protocolVersion";
     private final Map<String, CompiledTool> tools;
-    private final Map<String, byte[]> pages;
-    private final String firstCursor;
+    private final byte[] toolList;
     private final Map<String, Object> info;
     private final McpExecutor executor;
     private final int maxRequestBytes;
-
-    public enum ToolListing { COMPLETE, PAGINATED }
 
     public static final class Reply {
         private final int status;
@@ -50,15 +44,6 @@ public final class McpRuntime {
     }
 
     public McpRuntime(byte[] catalogBytes, McpExecutor executor, int maxRequestBytes) {
-        this(catalogBytes, executor, maxRequestBytes, ToolListing.PAGINATED);
-    }
-
-    public McpRuntime(byte[] catalogBytes, McpExecutor executor, ToolListing toolListing) {
-        this(catalogBytes, executor, MAX_REQUEST_BYTES, toolListing);
-    }
-
-    public McpRuntime(byte[] catalogBytes, McpExecutor executor, int maxRequestBytes, ToolListing toolListing) {
-        java.util.Objects.requireNonNull(toolListing);
         if (maxRequestBytes < 1024 || maxRequestBytes > 64 * 1024 * 1024) throw new IllegalArgumentException("Request limit must be between 1 KiB and 64 MiB");
         this.maxRequestBytes = maxRequestBytes;
         if (catalogBytes.length > 64 * 1024 * 1024) throw new IllegalArgumentException("Catalog exceeds 64 MiB");
@@ -67,32 +52,14 @@ public final class McpRuntime {
         this.executor = java.util.Objects.requireNonNull(executor);
         info = Json.map("name", Json.string(catalog.get("name")), "version", Json.string(catalog.get("version")));
         var toolMap = new LinkedHashMap<String, CompiledTool>();
-        var chunks = new ArrayList<List<Object>>();
-        var chunk = new ArrayList<Object>();
-        int size = 0;
+        var definitions = new ArrayList<Object>();
         for (var value : Json.list(catalog.get("tools"))) {
             var tool = new CompiledTool(value);
             if (toolMap.putIfAbsent(tool.name, tool) != null) throw new IllegalArgumentException("Duplicate tool: " + tool.name);
-            int toolSize = Json.bytes(tool.definition).length;
-            if (toolListing == ToolListing.PAGINATED && !chunk.isEmpty() && (size + toolSize > 128 * 1024 || chunk.size() >= 32)) {
-                chunks.add(chunk);
-                chunk = new ArrayList<>();
-                size = 0;
-            }
-            chunk.add(tool.definition);
-            size += toolSize;
+            definitions.add(tool.definition);
         }
-        if (!chunk.isEmpty() || chunks.isEmpty()) chunks.add(chunk);
         tools = Map.copyOf(toolMap);
-        var digest = digest(catalogBytes);
-        firstCursor = digest + ".0";
-        var encodedPages = new LinkedHashMap<String, byte[]>();
-        for (int index = 0; index < chunks.size(); index++) {
-            var page = Json.map("resultType", "complete", "tools", chunks.get(index), "ttlMs", 3600000, "cacheScope", "private");
-            if (index + 1 < chunks.size()) page.put("nextCursor", digest + "." + (index + 1));
-            encodedPages.put(digest + "." + index, Json.bytes(page));
-        }
-        pages = Map.copyOf(encodedPages);
+        toolList = Json.bytes(Json.map("resultType", "complete", "tools", definitions, "ttlMs", 3600000, "cacheScope", "private"));
     }
 
     public int toolCount() { return tools.size(); }
@@ -103,7 +70,7 @@ public final class McpRuntime {
         return handle(requestBytes, headers, executor);
     }
 
-    /** Uses a request-scoped executor while sharing the immutable catalog and encoded discovery pages. */
+    /** Uses a request-scoped executor while sharing the immutable catalog and encoded tool discovery. */
     public Reply handle(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor) {
         var reply = process(requestBytes, headers, java.util.Objects.requireNonNull(requestExecutor));
         if (headers != null) for (var entry : headers.entrySet())
@@ -176,13 +143,11 @@ public final class McpRuntime {
     }
 
     private Reply list(Object id, Map<String, Object> params) {
-        var cursor = params.containsKey("cursor") ? Json.string(params.get("cursor")) : firstCursor;
-        var page = pages.get(cursor);
-        if (page == null) return error(200, id, -32602, "Invalid or stale cursor; restart tools/list without a cursor");
+        if (params.containsKey("cursor")) return error(200, id, -32602, "Tool discovery is not paginated; request tools/list without a cursor");
         var prefix = ("{\"jsonrpc\":\"2.0\",\"id\":" + Json.write(id) + ",\"result\":").getBytes(StandardCharsets.UTF_8);
-        var response = new byte[prefix.length + page.length + 1];
+        var response = new byte[prefix.length + toolList.length + 1];
         System.arraycopy(prefix, 0, response, 0, prefix.length);
-        System.arraycopy(page, 0, response, prefix.length, page.length);
+        System.arraycopy(toolList, 0, response, prefix.length, toolList.length);
         response[response.length - 1] = '}';
         return new Reply(200, response);
     }
@@ -263,11 +228,6 @@ public final class McpRuntime {
     private static Reply unsupported(Object id, String requested) {
         return new Reply(400, Json.bytes(Json.map("jsonrpc", "2.0", "id", id, "error", Json.map("code", -32022,
                 "message", "Unsupported protocol version", "data", Json.map("supported", PROTOCOL_VERSIONS, "requested", requested)))));
-    }
-
-    private static String digest(byte[] bytes) {
-        try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes), 0, 12); }
-        catch (NoSuchAlgorithmException e) { throw new IllegalStateException(e); }
     }
 
     private static String decodeHeader(String value) {
