@@ -50,7 +50,7 @@ public final class McpRuntime {
     }
 
     public McpRuntime(byte[] catalogBytes, McpExecutor executor, int maxRequestBytes) {
-        this(catalogBytes, executor, maxRequestBytes, ToolListing.COMPLETE);
+        this(catalogBytes, executor, maxRequestBytes, ToolListing.PAGINATED);
     }
 
     public McpRuntime(byte[] catalogBytes, McpExecutor executor, ToolListing toolListing) {

@@ -198,12 +198,13 @@ Library callers can supply request/response limits and an upstream timeout direc
 JSON parsing rejects malformed UTF-8, duplicate object keys, excessive nesting,
 and unbounded numeric representations.
 
-Tool discovery is pre-encoded once and returns the complete catalog by default.
-This supports clients that only request the first `tools/list` page. The current
-ReAI catalog has 485 tools and approximately 1.5 MB of tool definitions.
-Library callers whose clients support pagination can pass
-`McpRuntime.ToolListing.PAGINATED` to the runtime constructor. That mode caps pages
-at 32 tools and approximately 128 KiB (a single larger tool occupies its own page).
+Tool discovery is pre-encoded once and paginated by default, with pages capped at
+32 tools and approximately 128 KiB (a single larger tool occupies its own page).
+Library callers supporting clients that do not follow discovery cursors can
+explicitly pass `McpRuntime.ToolListing.COMPLETE` to the runtime constructor.
+That mode returns the entire catalog without a continuation cursor. Check the
+complete response size against the consuming clients' limits before enabling it.
+The existing constructors and standalone CLI retain paginated discovery.
 Cursors are tied to the catalog
 digest, so cursors from a different build fail clearly. Catalogs are immutable for
 the lifetime of a runtime; restart with a newly compiled catalog to update tools.
