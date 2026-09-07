@@ -18,6 +18,7 @@ internal object Names {
     const val DELETE_MAPPING = "org.springframework.web.bind.annotation.DeleteMapping"
     const val PATH_VARIABLE = "org.springframework.web.bind.annotation.PathVariable"
     const val REQUEST_PARAM = "org.springframework.web.bind.annotation.RequestParam"
+    const val SPRING_DEFAULT_NONE = "\n\t\t\n\t\t\n\ue000\ue001\ue002\n\t\t\t\t\n"
     const val REQUEST_HEADER = "org.springframework.web.bind.annotation.RequestHeader"
     const val REQUEST_BODY = "org.springframework.web.bind.annotation.RequestBody"
     const val REQUEST_PART = "org.springframework.web.bind.annotation.RequestPart"
