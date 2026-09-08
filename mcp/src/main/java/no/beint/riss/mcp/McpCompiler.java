@@ -149,7 +149,8 @@ public final class McpCompiler {
         if (!requiredGroups.isEmpty()) input.put("required", requiredGroups);
         var tool = Json.map("name", name, "description", description(operation, method, path),
                 "inputSchema", selfContained(input, definitions));
-        if (operation.get("summary") instanceof String summary && !summary.isBlank()) tool.put("title", summary);
+        var summary = summary(operation, path);
+        if (!summary.isBlank()) tool.put("title", summary);
         if (operation.get("x-mcp-annotations") instanceof Map<?, ?> annotations) {
             var hints = new LinkedHashMap<String, Object>();
             for (var hint : List.of("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")) {
@@ -226,10 +227,16 @@ public final class McpCompiler {
     }
 
     private static String description(Map<String, Object> operation, String method, String path) {
-        var summary = String.valueOf(operation.getOrDefault("summary", ""));
+        var summary = summary(operation, path);
         var description = String.valueOf(operation.getOrDefault("description", ""));
         if (summary.isBlank() && description.isBlank()) return method.toUpperCase(Locale.ROOT) + " " + path;
         return summary.isBlank() ? description : description.isBlank() || summary.equals(description) ? summary : summary + "\n\n" + description;
+    }
+
+    private static String summary(Map<String, Object> operation, String path) {
+        var summary = operation.get("summary") instanceof String value ? value.strip() : "";
+        return Set.of("get", "list", "create", "update", "delete").contains(summary.toLowerCase(Locale.ROOT))
+                ? summary + " " + path : summary;
     }
 
     private static String jsonMediaType(Map<String, Object> content) {
