@@ -29,7 +29,7 @@ internal class SchemaFactory(
     private val inProgress = mutableSetOf<String>()
     private val jsonValueTypes = java.util.IdentityHashMap<KSClassDeclaration, KSType?>()
 
-    fun components(): Map<String, Schema> = components.toMap()
+    fun components(): Map<String, Schema> = java.util.Collections.unmodifiableMap(components)
 
     fun named(name: String, schema: Schema) {
         components[name] = schema
@@ -206,7 +206,8 @@ internal class SchemaFactory(
     private fun objectSchema(declaration: KSClassDeclaration, location: String, bindings: Bindings): Schema {
         val builder = Schema.builder().type("object")
         swaggerSchema(declaration)?.string("description")?.let(builder::description)
-        properties(declaration).forEach { property ->
+        val properties = properties(declaration)
+        properties.forEach { property ->
             val propertyLocation = "${declaration.qualified()}.${property.name}"
             val schema = schema(
                 property.type,
@@ -219,7 +220,7 @@ internal class SchemaFactory(
                 builder.require(property.name)
             }
         }
-        if (builder.build().properties().isEmpty() &&
+        if (properties.isEmpty() &&
             strict &&
             declaration.classKind in setOf(ClassKind.CLASS, ClassKind.INTERFACE)
         ) {
@@ -342,42 +343,42 @@ internal class SchemaFactory(
         sources: List<KSAnnotated>,
         swagger: com.google.devtools.ksp.symbol.KSAnnotation?,
     ): Schema {
-        var next = applySwagger(schema, swagger)
+        val next = applySwagger(schema, swagger)
         if (sources.isEmpty()) return next
+        val builder = next.toBuilder()
         sources.firstNotNullOfOrNull { it.annotation(Names.SIZE) }?.let { size ->
-            next = next.toBuilder()
+            builder
                 .minLength(size.int("min")?.takeIf { it > 0 })
                 .maxLength(size.int("max")?.takeIf { it < Int.MAX_VALUE })
                 .minItems(size.int("min")?.takeIf { it > 0 })
                 .maxItems(size.int("max")?.takeIf { it < Int.MAX_VALUE })
-                .build()
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.MIN)?.int("value") }?.let {
-            next = next.toBuilder().minimum(it.toBigDecimal()).build()
+            builder.minimum(it.toBigDecimal())
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.MAX)?.int("value") }?.let {
-            next = next.toBuilder().maximum(it.toBigDecimal()).build()
+            builder.maximum(it.toBigDecimal())
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MIN)?.string("value") }?.let {
-            next = next.toBuilder().minimum(BigDecimal(it)).build()
+            builder.minimum(BigDecimal(it))
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MAX)?.string("value") }?.let {
-            next = next.toBuilder().maximum(BigDecimal(it)).build()
+            builder.maximum(BigDecimal(it))
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.PATTERN)?.string("regexp") }?.let {
-            next = next.toBuilder().pattern(it).build()
+            builder.pattern(it)
         }
         if (sources.any { has(it, Names.EMAIL) }) {
-            next = next.toBuilder().format("email").build()
+            builder.format("email")
         }
         if (sources.any { has(it, Names.POSITIVE) }) {
             val integer = next.types().contains("integer")
-            next = next.toBuilder().minimum(if (integer) BigDecimal.ONE else BigDecimal("0.01")).build()
+            builder.minimum(if (integer) BigDecimal.ONE else BigDecimal("0.01"))
         }
         if (sources.any { has(it, Names.POSITIVE_OR_ZERO) }) {
-            next = next.toBuilder().minimum(BigDecimal.ZERO).build()
+            builder.minimum(BigDecimal.ZERO)
         }
-        return next
+        return builder.build()
     }
 
     private fun applySwagger(

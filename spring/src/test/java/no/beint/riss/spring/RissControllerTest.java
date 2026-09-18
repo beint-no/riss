@@ -7,10 +7,14 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.zip.GZIPInputStream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -73,7 +77,7 @@ class RissControllerTest {
             var request = new MockHttpServletRequest();
             request.setContextPath(prefix.getKey());
             for (var endpoint : List.of("/openapi", "/openapi/public")) {
-                var response = endpoint.equals("/openapi") ? single.ui(request) : multiple.namedUi("public", request);
+                var response = endpoint.equals("/openapi") ? single.ui(null, request) : multiple.namedUi("public", null, request);
                 assertArrayEquals(
                         template.replace("{{SPEC_PATH}}", prefix.getValue() + endpoint).getBytes(StandardCharsets.UTF_8),
                         response.getBody()
@@ -151,6 +155,55 @@ class RissControllerTest {
 
         mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.IF_NONE_MATCH, etag))
                 .andExpect(status().isNotModified());
+    }
+
+    @Test
+    void specIsServedGzippedWhenAccepted() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)));
+
+        var response = mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.ACCEPT_ENCODING, "br, gzip;q=0.8"))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertEquals("gzip", result.getResponse().getHeader(HttpHeaders.CONTENT_ENCODING)))
+                .andExpect(result -> assertEquals(HttpHeaders.ACCEPT_ENCODING, result.getResponse().getHeader(HttpHeaders.VARY)))
+                .andReturn()
+                .getResponse();
+        try (var in = new GZIPInputStream(new ByteArrayInputStream(response.getContentAsByteArray()))) {
+            assertArrayEquals(PUBLIC_JSON, in.readAllBytes());
+        }
+        var gzipEtag = response.getHeader(HttpHeaders.ETAG);
+        var rawEtag = mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.ACCEPT_ENCODING, "gzip;q=0"))
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(HttpHeaders.CONTENT_ENCODING))
+                .andExpect(content().bytes(PUBLIC_JSON))
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
+        assertNotEquals(rawEtag, gzipEtag);
+
+        mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.ACCEPT_ENCODING, "gzip")
+                        .header(HttpHeaders.IF_NONE_MATCH, gzipEtag))
+                .andExpect(status().isNotModified());
+        mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON)
+                        .header(HttpHeaders.ACCEPT_ENCODING, "gzip")
+                        .header(HttpHeaders.IF_NONE_MATCH, rawEtag))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void explorerReturnsNotModifiedWhenEtagMatches() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)));
+        var etag = mvc.perform(get("/openapi/ui").accept(MediaType.TEXT_HTML))
+                .andExpect(status().isOk())
+                .andExpect(header().exists(HttpHeaders.ETAG))
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
+
+        mvc.perform(get("/openapi/ui").accept(MediaType.TEXT_HTML).header(HttpHeaders.IF_NONE_MATCH, etag))
+                .andExpect(status().isNotModified());
+        mvc.perform(get("/demo/openapi/ui").contextPath("/demo").accept(MediaType.TEXT_HTML).header(HttpHeaders.IF_NONE_MATCH, etag))
+                .andExpect(status().isOk());
     }
 
     @Test

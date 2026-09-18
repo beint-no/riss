@@ -24,7 +24,7 @@ public record Operation(
         description = emptyToNull(description);
         tags = tags == null ? List.of() : List.copyOf(tags);
         parameters = parameters == null ? List.of() : List.copyOf(parameters);
-        responses = responses == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(responses));
+        responses = responses == null ? Map.of() : Map.copyOf(responses);
         security = security == null ? List.of() : List.copyOf(security);
         if (responses.isEmpty()) {
             throw new IllegalArgumentException("operation '" + operationId + "' needs at least one response");

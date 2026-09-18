@@ -1,6 +1,5 @@
 package no.beint.riss.model;
 
-import java.util.LinkedHashMap;
 import java.util.Map;
 
 public record Components(
@@ -8,10 +7,10 @@ public record Components(
         Map<String, SecurityScheme> securitySchemes
 ) {
     public Components {
-        schemas = schemas == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(schemas));
+        schemas = schemas == null ? Map.of() : Map.copyOf(schemas);
         securitySchemes = securitySchemes == null
                 ? Map.of()
-                : Map.copyOf(new LinkedHashMap<>(securitySchemes));
+                : Map.copyOf(securitySchemes);
     }
 
     public static Components empty() {

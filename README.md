@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.12"
+    id("no.beint.riss") version "0.1.14"
 }
 ```
 
@@ -45,7 +45,8 @@ class PublicApiDocs
 ```
 
 The compiled document is served at `GET /openapi`. The explorer is at `GET /openapi/ui`.
-Those paths are fixed. Do not configure a custom prefix. `/openapi` includes an `ETag`.
+Those paths are fixed. Do not configure a custom prefix. `/openapi` includes an `ETag` and is
+served gzip-encoded when the client accepts it; both representations are encoded once at startup.
 
 If an application compiles more than one document, `/openapi` lists them and each
 document is served at `/openapi/{name}` and `/openapi/{name}/ui`. A single document

@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -37,6 +38,21 @@ class RissCompatibilityControllerTest {
                             "no-store"
                     ))
                     .andExpect(result -> assertHeader(result.getResponse().getHeader(HttpHeaders.LOCATION), "/openapi/ui"));
+        }
+    }
+
+    @Test
+    void aliasesServeGzipWhenAccepted() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON)), properties(null));
+
+        var body = mvc.perform(get("/v3/api-docs").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.ACCEPT_ENCODING, "gzip"))
+                .andExpect(status().isOk())
+                .andExpect(result -> assertEquals("gzip", result.getResponse().getHeader(HttpHeaders.CONTENT_ENCODING)))
+                .andReturn()
+                .getResponse()
+                .getContentAsByteArray();
+        try (var in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(body))) {
+            org.junit.jupiter.api.Assertions.assertArrayEquals(PUBLIC_JSON, in.readAllBytes());
         }
     }
 

@@ -1,7 +1,7 @@
 package no.beint.riss.compiler
 
-import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFile
@@ -25,16 +25,13 @@ internal data class AssembledDocument(
 )
 
 internal class DocumentAssembler(
-    private val resolver: Resolver,
     private val enumReader: EnumReader,
     private val schemas: SchemaFactory,
     private val diagnostics: Diagnostics,
     private val options: RissOptions,
 ) {
-    fun assemble(operations: List<ScannedOperation>): AssembledDocument {
-        val documentType = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT)
-            .filterIsInstance<KSClassDeclaration>()
-            .toList()
+    fun assemble(operations: List<ScannedOperation>, documentTypes: List<KSAnnotated>): AssembledDocument {
+        val documentType = documentTypes.filterIsInstance<KSClassDeclaration>()
         if (documentType.size > 1) {
             diagnostics.error(
                 "RISS-DOCUMENT",
