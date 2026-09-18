@@ -52,4 +52,4 @@ Riss documents HTTP JSON APIs and multipart uploads. It does not implement callb
 
 The model and runtime do not depend on Spring. The MVC adapter serves the compiled spec. A non-Spring process can load `SpecSet` through the service loader.
 
-Riss targets released JDK 26 APIs and uses no preview feature.
+Riss targets released JDK 27 APIs and uses no preview feature.

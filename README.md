@@ -8,7 +8,7 @@ small HTML explorer. It does not ship Swagger UI, Scalar, swagger-core, or Jacks
 
 The name is Norwegian *riss*: an outline.
 
-Riss requires JDK 26. Its MVC adapter targets Spring Framework 7 and Spring Boot 4.
+Riss requires JDK 27. Its MVC adapter targets Spring Framework 7 and Spring Boot 4.
 A process without Spring can load the compiled `SpecSet` through the service loader.
 
 The independent [MCP module](mcp/README.md) compiles an OpenAPI document into a tools
