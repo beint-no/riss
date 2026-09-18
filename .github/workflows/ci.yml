@@ -24,7 +24,7 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
-          distribution: liberica
+          distribution: corretto
           java-version: '27'
 
       - name: Set up Gradle
