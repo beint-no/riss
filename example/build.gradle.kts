@@ -2,9 +2,9 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("jvm")
-    kotlin("plugin.spring") version "2.4.20"
-    id("com.google.devtools.ksp")
-    id("org.springframework.boot")
+    alias(libs.plugins.kotlin.spring)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.spring.boot)
 }
 
 kotlin {
@@ -15,15 +15,15 @@ kotlin {
 dependencies {
     implementation(kotlin("reflect"))
     implementation(project(":spring"))
-    implementation("org.springframework.boot:spring-boot-starter-webmvc:4.1.0")
-    implementation("org.springframework.boot:spring-boot-starter-validation:4.1.0")
-    compileOnly("io.swagger.core.v3:swagger-annotations-jakarta:2.2.38")
+    implementation(libs.spring.boot.starter.webmvc)
+    implementation(libs.spring.boot.starter.validation)
+    compileOnly(libs.swagger.annotations)
     ksp(project(":compiler"))
 
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test:4.1.0")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testImplementation(libs.spring.boot.starter.webmvc.test)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 ksp {

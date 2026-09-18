@@ -12,11 +12,11 @@ kotlin {
 
 dependencies {
     implementation(project(":model"))
-    implementation("com.google.devtools.ksp:symbol-processing-api:2.3.10")
+    implementation(libs.ksp.api)
 
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation(platform(libs.junit.bom))
     testImplementation(kotlin("test-junit5"))
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.test {

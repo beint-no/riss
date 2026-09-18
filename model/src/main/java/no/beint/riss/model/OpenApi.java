@@ -20,7 +20,7 @@ public record OpenApi(
     public OpenApi {
         Objects.requireNonNull(info, "info");
         servers = servers == null ? List.of() : List.copyOf(servers);
-        paths = paths == null ? Map.of() : Map.copyOf(new LinkedHashMap<>(paths));
+        paths = paths == null ? Map.of() : Map.copyOf(paths);
         components = components == null ? Components.empty() : components;
         tags = tags == null ? List.of() : List.copyOf(tags);
         security = security == null ? List.of() : List.copyOf(security);

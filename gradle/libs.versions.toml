@@ -1,0 +1,33 @@
+# Single source for dependency versions. RissPlugin.SWAGGER_ANNOTATIONS repeats the swagger
+# version in Java because the plugin cannot read this catalog at consumer build time.
+[versions]
+kotlin = "2.4.20"
+ksp = "2.3.10"
+spring = "7.0.8"
+spring-boot = "4.1.0"
+servlet = "6.1.0"
+junit = "6.0.3"
+swagger = "2.2.38"
+maven-publish = "0.37.0"
+
+[libraries]
+ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
+ksp-gradle-plugin = { module = "com.google.devtools.ksp:symbol-processing-gradle-plugin", version.ref = "ksp" }
+spring-webmvc = { module = "org.springframework:spring-webmvc", version.ref = "spring" }
+spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot" }
+spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc", version.ref = "spring-boot" }
+spring-boot-starter-validation = { module = "org.springframework.boot:spring-boot-starter-validation", version.ref = "spring-boot" }
+spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test", version.ref = "spring-boot" }
+servlet-api = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "servlet" }
+swagger-annotations = { module = "io.swagger.core.v3:swagger-annotations-jakarta", version.ref = "swagger" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-spring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "maven-publish" }

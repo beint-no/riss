@@ -28,7 +28,8 @@ private class RissProcessor(
             val diagnostics = Diagnostics()
             EnumReader(options.classpath, diagnostics).use { enumReader ->
                 val schemas = SchemaFactory(enumReader, diagnostics, options.strict)
-                val documentType = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).firstOrNull()
+                val documentTypes = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).toList()
+                val documentType = documentTypes.firstOrNull()
                 val documentAnnotation = documentType?.annotations?.firstOrNull { it.matches(Names.RISS_DOCUMENT) }
                 val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
                 val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
@@ -47,7 +48,7 @@ private class RissProcessor(
                         documentType,
                     )
                 }
-                val assembled = DocumentAssembler(resolver, enumReader, schemas, diagnostics, options).assemble(operations)
+                val assembled = DocumentAssembler(enumReader, schemas, diagnostics, options).assemble(operations, documentTypes)
                 if (diagnostics.problems.isNotEmpty()) {
                     diagnostics.problems.forEach { problem ->
                         logger.error(problem.message, problem.symbol)

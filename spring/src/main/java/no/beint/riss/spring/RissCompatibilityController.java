@@ -17,8 +17,7 @@ import java.util.List;
 
 @RestController
 public class RissCompatibilityController {
-    private final SpecSet primarySpec;
-    private final String primarySpecEtag;
+    private final RissSpecResponse.Encoded primarySpec;
     private final String primaryUiPath;
     private final boolean uiEnabled;
 
@@ -27,11 +26,11 @@ public class RissCompatibilityController {
     }
 
     RissCompatibilityController(List<SpecSet> specs, RissProperties properties) {
-        this.primarySpec = resolvePrimarySpec(specs, properties.getCompatibility().getPrimaryDocument());
-        this.primarySpecEtag = RissSpecResponse.etag(primarySpec.json());
+        var primary = resolvePrimarySpec(specs, properties.getCompatibility().getPrimaryDocument());
+        this.primarySpec = RissSpecResponse.Encoded.of(primary.json());
         this.primaryUiPath = specs.size() == 1
                 ? "/openapi/ui"
-                : "/openapi/" + primarySpec.name() + "/ui";
+                : "/openapi/" + primary.name() + "/ui";
         this.uiEnabled = properties.isUiEnabled();
     }
 
@@ -40,9 +39,10 @@ public class RissCompatibilityController {
             produces = MediaType.APPLICATION_JSON_VALUE
     )
     public ResponseEntity<byte[]> spec(
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding
     ) {
-        return RissSpecResponse.json(primarySpec.json(), primarySpecEtag, ifNoneMatch);
+        return RissSpecResponse.json(primarySpec, ifNoneMatch, acceptEncoding);
     }
 
     @GetMapping(path = {"/swagger-ui", "/swagger-ui/", "/swagger-ui.html", "/swagger-ui/index.html"})

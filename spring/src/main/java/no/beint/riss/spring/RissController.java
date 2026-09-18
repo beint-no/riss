@@ -31,7 +31,7 @@ public class RissController {
 
     private final List<SpecSet> specs;
     private final RissProperties properties;
-    private final Map<String, String> etags;
+    private final Map<String, RissSpecResponse.Encoded> documents;
 
     public RissController(RissProperties properties) {
         this(SpecSets.load(), properties);
@@ -40,55 +40,64 @@ public class RissController {
     RissController(List<SpecSet> specs, RissProperties properties) {
         this.specs = List.copyOf(specs);
         this.properties = properties;
-        var tags = new LinkedHashMap<String, String>();
+        var encoded = new LinkedHashMap<String, RissSpecResponse.Encoded>();
         for (var spec : this.specs) {
-            tags.put(spec.name(), RissSpecResponse.etag(spec.json()));
+            encoded.put(spec.name(), RissSpecResponse.Encoded.of(spec.json()));
         }
-        this.etags = Map.copyOf(tags);
+        this.documents = Map.copyOf(encoded);
     }
 
     @GetMapping(path = "/openapi", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<byte[]> spec(
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding,
             HttpServletRequest request
     ) {
         if (specs.size() == 1) {
-            return json(specs.getFirst(), ifNoneMatch);
+            return json(specs.getFirst(), ifNoneMatch, acceptEncoding);
         }
         return catalog(request, ifNoneMatch);
     }
 
     @GetMapping(path = "/openapi/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> ui(HttpServletRequest request) {
+    public ResponseEntity<byte[]> ui(
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            HttpServletRequest request
+    ) {
         if (!properties.isUiEnabled()) {
             return ResponseEntity.notFound().build();
         }
         if (specs.size() == 1) {
-            return ui(RissRequestPath.resolve(request, "/openapi"));
+            return ui(RissRequestPath.resolve(request, "/openapi"), ifNoneMatch);
         }
-        return catalogUi(request);
+        return catalogUi(request, ifNoneMatch);
     }
 
     @GetMapping(path = "/openapi/{name}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<byte[]> namedSpec(
             @PathVariable("name") String name,
-            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding
     ) {
         if (specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> json(spec, ifNoneMatch))
+                .map(spec -> json(spec, ifNoneMatch, acceptEncoding))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<byte[]> namedUi(@PathVariable("name") String name, HttpServletRequest request) {
+    public ResponseEntity<byte[]> namedUi(
+            @PathVariable("name") String name,
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            HttpServletRequest request
+    ) {
         if (!properties.isUiEnabled() || specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
         return find(name)
-                .map(spec -> ui(RissRequestPath.resolve(request, "/openapi/" + spec.name())))
+                .map(spec -> ui(RissRequestPath.resolve(request, "/openapi/" + spec.name()), ifNoneMatch))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -96,11 +105,11 @@ public class RissController {
         return specs.stream().filter(spec -> spec.name().equals(name)).findFirst();
     }
 
-    private ResponseEntity<byte[]> json(SpecSet spec, String ifNoneMatch) {
-        return bytes(spec.json(), etags.get(spec.name()), ifNoneMatch);
+    private ResponseEntity<byte[]> json(SpecSet spec, String ifNoneMatch, String acceptEncoding) {
+        return RissSpecResponse.json(documents.get(spec.name()), ifNoneMatch, acceptEncoding);
     }
 
-    private ResponseEntity<byte[]> ui(String specPath) {
+    private ResponseEntity<byte[]> ui(String specPath, String ifNoneMatch) {
         var path = specPath.getBytes(StandardCharsets.UTF_8);
         var body = new byte[UI_SIZE + path.length * (UI.length - 1)];
         var offset = 0;
@@ -112,20 +121,12 @@ public class RissController {
             System.arraycopy(UI[index], 0, body, offset, UI[index].length);
             offset += UI[index].length;
         }
-        return ResponseEntity.ok()
-                .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .header("X-Content-Type-Options", "nosniff")
-                .body(body);
+        return RissSpecResponse.html(body, ifNoneMatch);
     }
 
     private ResponseEntity<byte[]> catalog(HttpServletRequest request, String ifNoneMatch) {
         var body = catalogBytes(specs, request);
-        return bytes(body, RissSpecResponse.etag(body), ifNoneMatch);
-    }
-
-    private ResponseEntity<byte[]> bytes(byte[] body, String etag, String ifNoneMatch) {
-        return RissSpecResponse.json(body, etag, ifNoneMatch);
+        return RissSpecResponse.json(body, RissSpecResponse.etag(body), ifNoneMatch);
     }
 
     private static byte[] catalogBytes(List<SpecSet> specs, HttpServletRequest request) {
@@ -146,7 +147,7 @@ public class RissController {
         return json.toString().getBytes(StandardCharsets.UTF_8);
     }
 
-    private ResponseEntity<byte[]> catalogUi(HttpServletRequest request) {
+    private ResponseEntity<byte[]> catalogUi(HttpServletRequest request, String ifNoneMatch) {
         var html = new StringBuilder("""
                 <!doctype html><html lang="en"><meta charset="utf-8">
                 <title>API documents</title>
@@ -162,11 +163,7 @@ public class RissController {
                     .append("\">JSON</a></li>");
         });
         html.append("</ul></body></html>");
-        return ResponseEntity.ok()
-                .contentType(new MediaType(MediaType.TEXT_HTML, StandardCharsets.UTF_8))
-                .header(HttpHeaders.CACHE_CONTROL, "no-cache")
-                .header("X-Content-Type-Options", "nosniff")
-                .body(html.toString().getBytes(StandardCharsets.UTF_8));
+        return RissSpecResponse.html(html.toString().getBytes(StandardCharsets.UTF_8), ifNoneMatch);
     }
 
     private static String escape(String value) {
