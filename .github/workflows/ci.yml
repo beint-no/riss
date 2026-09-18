@@ -24,8 +24,8 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v5
         with:
-          distribution: temurin
-          java-version: "26"
+          distribution: liberica
+          java-version: '27'
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5

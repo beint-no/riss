@@ -1,6 +1,6 @@
 # Riss MCP
 
-A build-time OpenAPI-to-MCP compiler and a small tools server. Requires JDK 26.
+A build-time OpenAPI-to-MCP compiler and a small tools server. Requires JDK 27.
 There are **no dependencies**, including on other Riss modules or test libraries.
 
 The module accepts an OpenAPI 3.1 JSON document and emits a portable tool catalog.

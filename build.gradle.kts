@@ -26,11 +26,11 @@ tasks.register("printReleaseVersion") {
 subprojects {
     plugins.withId("java") {
         extensions.configure<JavaPluginExtension> {
-            toolchain.languageVersion.set(JavaLanguageVersion.of(26))
+            toolchain.languageVersion.set(JavaLanguageVersion.of(27))
         }
 
         tasks.withType<JavaCompile>().configureEach {
-            options.release.set(26)
+            options.release.set(27)
         }
     }
 
