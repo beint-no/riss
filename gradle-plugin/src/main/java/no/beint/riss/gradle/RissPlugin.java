@@ -13,7 +13,7 @@ import javax.lang.model.SourceVersion;
 import java.util.Locale;
 
 public final class RissPlugin implements Plugin<Project> {
-    public static final String SWAGGER_ANNOTATIONS = "io.swagger.core.v3:swagger-annotations-jakarta:2.2.38";
+    public static final String SWAGGER_ANNOTATIONS = "io.swagger.core.v3:swagger-annotations-jakarta:2.2.55";
 
     @Override
     public void apply(Project project) {
