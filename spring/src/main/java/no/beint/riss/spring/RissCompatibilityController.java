@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
+import java.util.function.Function;
 
 @RestController
 public class RissCompatibilityController {
@@ -26,8 +27,21 @@ public class RissCompatibilityController {
     }
 
     RissCompatibilityController(List<SpecSet> specs, RissProperties properties) {
+        this(specs, properties, spec -> RissSpecResponse.Encoded.of(spec.json()));
+    }
+
+    /** Reuses the documents the canonical controller already loaded and encoded at startup. */
+    RissCompatibilityController(RissController controller, RissProperties properties) {
+        this(controller.specs(), properties, controller::encoded);
+    }
+
+    private RissCompatibilityController(
+            List<SpecSet> specs,
+            RissProperties properties,
+            Function<SpecSet, RissSpecResponse.Encoded> encoder
+    ) {
         var primary = resolvePrimarySpec(specs, properties.getCompatibility().getPrimaryDocument());
-        this.primarySpec = RissSpecResponse.Encoded.of(primary.json());
+        this.primarySpec = encoder.apply(primary);
         this.primaryUiPath = specs.size() == 1
                 ? "/openapi/ui"
                 : "/openapi/" + primary.name() + "/ui";

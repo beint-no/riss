@@ -1,5 +1,6 @@
 package no.beint.riss.spring;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -20,7 +21,13 @@ public class RissAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(prefix = "riss.compatibility", name = "enabled", havingValue = "true")
-    RissCompatibilityController rissCompatibilityController(RissProperties properties) {
-        return new RissCompatibilityController(properties);
+    RissCompatibilityController rissCompatibilityController(
+            RissProperties properties,
+            ObjectProvider<RissController> controller
+    ) {
+        var shared = controller.getIfUnique();
+        return shared == null
+                ? new RissCompatibilityController(properties)
+                : new RissCompatibilityController(shared, properties);
     }
 }

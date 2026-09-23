@@ -2,7 +2,7 @@
 
 ## Objective
 
-Riss compiles a Spring MVC API into one OpenAPI 3.1 JSON document.
+Riss compiles a Spring MVC API into OpenAPI 3.1 JSON documents.
 
 It optimizes for four properties:
 
@@ -24,16 +24,16 @@ JSON Schema uses the 2020-12 dialect. Nullable values use a `type` array that in
 3. It builds component schemas from Kotlin and Java types, Bean Validation, Jackson names, and `@Schema`.
 4. Named string and object schemas, global headers, default responses and security schemes are read from Riss annotations.
 5. Unknown `$ref`s, `Any`/`Object` as a request or response root, non-String map keys, missing path variables and unreadable `@JsonValue` enums fail compilation. Nested `Any`, `Object`, `JsonNode` and unbound type parameters are emitted as unconstrained JSON Schema. Generic types such as `Page<Invoice>` become distinct component schemas. Sealed types become `oneOf` their visible subclasses.
-6. Jackson 3 writes the JSON next to a generated `SpecSet` and a service-loader registration.
+6. A built-in deterministic writer emits the JSON with sorted object keys next to a generated `SpecSet` and a service-loader registration.
 
-The compiler may read swagger annotations. It never depends on swagger-core, swagger-models or Jackson 2.
-Jackson 3 is a compiler-only dependency used to emit JSON. The runtime serves the finished bytes.
+The compiler may read swagger annotations. It never depends on swagger-core, swagger-models or Jackson.
+The runtime serves the finished bytes.
 
 ## Runtime
 
-The runtime, model, Spring adapter and Gradle plugin are Java. The compiler is Kotlin because it uses KSP.
+The runtime, model, Spring adapter, Gradle plugin and MCP module are Java. The compiler is Kotlin because it uses KSP.
 
-A request for `GET /openapi` writes the compiled UTF-8 bytes. `GET /openapi/ui` writes one HTML file. There is no schema walk and no YAML conversion at request time.
+A request for `GET /openapi` writes the compiled UTF-8 bytes, or their gzip encoding computed once at startup. `GET /openapi/ui` writes one HTML file. There is no schema walk and no YAML conversion at request time.
 
 Those paths are the convention. Apps do not configure a prefix. `@RissDocument` is the source of truth for scan packages, paths, and the document name. One compiled document is served only at `/openapi` and `/openapi/ui`. When several documents exist, `/openapi` lists them and each document is addressed as `/openapi/{name}`.
 

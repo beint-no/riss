@@ -106,7 +106,15 @@ public class RissController {
     }
 
     private ResponseEntity<byte[]> json(SpecSet spec, String ifNoneMatch, String acceptEncoding) {
-        return RissSpecResponse.json(documents.get(spec.name()), ifNoneMatch, acceptEncoding);
+        return RissSpecResponse.json(encoded(spec), ifNoneMatch, acceptEncoding);
+    }
+
+    List<SpecSet> specs() {
+        return specs;
+    }
+
+    RissSpecResponse.Encoded encoded(SpecSet spec) {
+        return documents.get(spec.name());
     }
 
     private ResponseEntity<byte[]> ui(String specPath, String ifNoneMatch) {
