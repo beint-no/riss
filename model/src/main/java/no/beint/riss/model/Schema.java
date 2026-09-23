@@ -82,10 +82,6 @@ public final class Schema {
         return new Builder();
     }
 
-    public boolean isRef() {
-        return ref != null;
-    }
-
     public String ref() {
         return ref;
     }
@@ -179,13 +175,6 @@ public final class Schema {
             return this;
         }
         return toBuilder().description(description).build();
-    }
-
-    public Schema withExample(String example) {
-        if (Objects.equals(this.example, example)) {
-            return this;
-        }
-        return toBuilder().example(example).build();
     }
 
     public Schema nullable() {

@@ -14,8 +14,7 @@ directory and supply an ordinary Java build; its only integration contract is JS
 
 ## Build and compile
 
-MCP is available as `no.beint.riss:mcp:0.1.14`. It was added after the 0.1.9
-release and is not part of that older release.
+MCP is available as `no.beint.riss:mcp:0.1.14`.
 
 ```sh
 ./gradlew :mcp:build

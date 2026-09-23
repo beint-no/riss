@@ -23,10 +23,6 @@ public record SecurityScheme(
         return new SecurityScheme("http", null, "bearer", bearerFormat, null, null);
     }
 
-    public static SecurityScheme apiKeyHeader(String headerName) {
-        return new SecurityScheme("apiKey", null, null, null, headerName, "header");
-    }
-
     private static String emptyToNull(String value) {
         return value == null || value.isBlank() ? null : value;
     }

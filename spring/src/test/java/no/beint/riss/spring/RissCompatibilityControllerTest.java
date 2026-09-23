@@ -109,6 +109,35 @@ class RissCompatibilityControllerTest {
     }
 
     @Test
+    void sharesDocumentsEncodedByCanonicalController() throws Exception {
+        var reads = new java.util.concurrent.atomic.AtomicInteger();
+        var counted = new SpecSet() {
+            @Override
+            public String name() {
+                return "public";
+            }
+
+            @Override
+            public byte[] json() {
+                reads.incrementAndGet();
+                return PUBLIC_JSON;
+            }
+        };
+        var properties = properties(null);
+        var canonical = new RissController(List.of(counted, spec("site", SITE_JSON)), properties);
+        properties.getCompatibility().setPrimaryDocument("public");
+        var mvc = MockMvcBuilders.standaloneSetup(new RissCompatibilityController(canonical, properties)).build();
+
+        assertEquals(1, reads.get());
+        var canonicalEtag = MockMvcBuilders.standaloneSetup(canonical).build()
+                .perform(get("/openapi/public")).andReturn().getResponse().getHeader(HttpHeaders.ETAG);
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(PUBLIC_JSON))
+                .andExpect(result -> assertHeader(result.getResponse().getHeader(HttpHeaders.ETAG), canonicalEtag));
+    }
+
+    @Test
     void uiAliasesReturnNotFoundWhenUiIsDisabled() throws Exception {
         var properties = properties(null);
         properties.setUiEnabled(false);

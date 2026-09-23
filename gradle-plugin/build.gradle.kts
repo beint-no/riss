@@ -5,10 +5,6 @@ plugins {
 
 dependencies {
     implementation(libs.ksp.gradle.plugin)
-    testImplementation(gradleTestKit())
-    testImplementation(platform(libs.junit.bom))
-    testImplementation(libs.junit.jupiter)
-    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 gradlePlugin {
@@ -28,8 +24,4 @@ tasks.jar {
 
 tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Xlint:deprecation")
-}
-
-tasks.test {
-    useJUnitPlatform()
 }

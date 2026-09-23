@@ -88,7 +88,7 @@ subprojects {
                 name.set("Riss ${project.name}")
                 description.set(
                     when (project.name) {
-                        "model" -> "OpenAPI 3.1 document model and JSON writer for Riss."
+                        "model" -> "OpenAPI 3.1 document model for the Riss compiler."
                         "runtime" -> "Dependency-free Java runtime that serves a compiled Riss spec."
                         "compiler" -> "Build-time Kotlin and Java OpenAPI compiler for Riss."
                         "spring" -> "Spring MVC adapter that serves the Riss spec and UI."
