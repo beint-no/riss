@@ -14,11 +14,11 @@ directory and supply an ordinary Java build; its only integration contract is JS
 
 ## Build and compile
 
-MCP is available as `no.beint.riss:mcp:0.1.14`.
+MCP is available as `no.beint.riss:mcp:0.1.15`.
 
 ```sh
 ./gradlew :mcp:build
-java -jar mcp/build/libs/mcp-0.1.14.jar compile \
+java -jar mcp/build/libs/mcp-0.1.15.jar compile \
   --spec /path/to/openapi.json \
   --out /path/to/build/mcp/catalog.json
 ```
@@ -210,3 +210,13 @@ Protocol references: [tools](https://modelcontextprotocol.io/specification/2026-
 [Streamable HTTP](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http),
 [schema](https://modelcontextprotocol.io/specification/2026-07-28/schema),
 [legacy initialization](https://modelcontextprotocol.io/specification/2025-11-25/basic/lifecycle).
+
+### Hosted validation diagnostics
+
+`McpRuntime.handle(request, headers, executor, diagnostics)` accepts a request-scoped
+`Consumer<McpRuntime.SchemaDiagnostic>`. Output validation runs once; on failure the
+observer receives the instance location, keyword, expected type/constraint and actual
+JSON type. Client replies remain unchanged, and observer exceptions do not change them.
+Instance locations use escaped JSON Pointer segments; arbitrary additional-property
+names are redacted as `<additional-property>`. Diagnostics never include response values.
+Keep the observer local to its request; runtime instances can be shared concurrently.

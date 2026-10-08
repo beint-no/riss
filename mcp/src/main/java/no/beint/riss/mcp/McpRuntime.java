@@ -12,6 +12,9 @@ import java.util.Map;
 /** Thread-safe, stateless tools protocol engine. Tool discovery is encoded once at construction. */
 public final class McpRuntime {
     public static final List<String> PROTOCOL_VERSIONS = List.of("2026-07-28", "2025-11-25", "2025-06-18", "2025-03-26");
+    /** Value-free output-validation diagnostics; instancePath is a JSON Pointer. */
+    public record SchemaDiagnostic(String instancePath, String keyword, String expected, String actual) {}
+
     public static final int MAX_REQUEST_BYTES = 1024 * 1024;
     private static final String CURRENT = PROTOCOL_VERSIONS.getFirst();
     private static final String VERSION_META = "io.modelcontextprotocol/protocolVersion";
@@ -72,13 +75,20 @@ public final class McpRuntime {
 
     /** Uses a request-scoped executor while sharing the immutable catalog and encoded tool discovery. */
     public Reply handle(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor) {
-        var reply = process(requestBytes, headers, java.util.Objects.requireNonNull(requestExecutor));
+        return handle(requestBytes, headers, requestExecutor, diagnostic -> {});
+    }
+
+    /** Reports output failures to a request-scoped observer, without exposing diagnostics to the client. */
+    public Reply handle(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor,
+                        java.util.function.Consumer<SchemaDiagnostic> diagnostics) {
+        var reply = process(requestBytes, headers, java.util.Objects.requireNonNull(requestExecutor),
+                java.util.Objects.requireNonNull(diagnostics));
         if (headers != null) for (var entry : headers.entrySet())
             if (entry.getKey().equalsIgnoreCase("MCP-Protocol-Version")) return reply.forVersion(entry.getValue());
         return reply;
     }
 
-    private Reply process(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor) {
+    private Reply process(byte[] requestBytes, Map<String, String> headers, McpExecutor requestExecutor, java.util.function.Consumer<SchemaDiagnostic> diagnostics) {
         if (requestBytes.length > maxRequestBytes) return error(413, null, -32600, "Request exceeds byte limit");
         Object parsed;
         try { parsed = Json.parse(requestBytes); }
@@ -122,7 +132,7 @@ public final class McpRuntime {
                         "capabilities", capabilities(), "_meta", Json.map("io.modelcontextprotocol/serverInfo", info), "ttlMs", 3600000, "cacheScope", "private"));
                 case "ping" -> result(id, Json.map("resultType", "complete"));
                 case "tools/list" -> list(id, params);
-                case "tools/call" -> call(id, params, requestExecutor);
+                case "tools/call" -> call(id, params, requestExecutor, diagnostics);
                 default -> error(CURRENT.equals(version) && headers != null ? 404 : 200, id, -32601, "Method not found");
             };
         } catch (IllegalArgumentException e) {
@@ -152,7 +162,7 @@ public final class McpRuntime {
         return new Reply(200, response);
     }
 
-    private Reply call(Object id, Map<String, Object> params, McpExecutor requestExecutor) {
+    private Reply call(Object id, Map<String, Object> params, McpExecutor requestExecutor, java.util.function.Consumer<SchemaDiagnostic> diagnostics) {
         var name = Json.string(params.get("name"));
         var tool = tools.get(name);
         if (tool == null) return error(200, id, -32602, "Unknown tool: " + name);
@@ -186,8 +196,12 @@ public final class McpRuntime {
             else value = Json.map("contentType", mediaType, "base64", Base64.getEncoder().encodeToString(body));
             var structured = Json.map("status", response.status(), "result", value);
             if (tool.definition.get("outputSchema") instanceof Map<?, ?> schema) {
-                try { SchemaCheck.validate(structured, Json.object(schema)); }
-                catch (IllegalArgumentException e) { return toolError(id, "API response does not match the compiled output schema"); }
+                var diagnostic = SchemaCheck.diagnostic(structured, Json.object(schema));
+                if (diagnostic != null) {
+                    try { diagnostics.accept(diagnostic); }
+                    catch (RuntimeException ignored) { /* Observability must not change the protocol result. */ }
+                    return toolError(id, "API response does not match the compiled output schema");
+                }
             }
             return result(id, Json.map("resultType", "complete", "content", List.of(Json.map("type", "text", "text", Json.write(structured))),
                     "structuredContent", structured, "isError", false));
