@@ -124,9 +124,8 @@ integration test.
 4. **Avoid an unbounded URL-dependent explorer/catalog cache.** ReAI has two documents,
    so linear name lookup and catalog construction are small. Request prefixes can
    vary, and caching every prefix would trade modest CPU savings for retained memory.
-5. **Keep dependency cleanup separate from this patch.** The runtime's transitive
-   `model` dependency is unused by its implementation, but removing it changes the
-   classpath exposed to consumers. It is small and not an immediate performance win.
+5. **Keep dependency cleanup separate from this patch.** The runtime's unused
+   transitive `model` dependency was later removed in 0.1.14 (#24).
 
 The first pass above was followed by the release audit below. Consumer adoption is
 tracked separately from the library measurements.

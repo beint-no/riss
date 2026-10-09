@@ -15,7 +15,8 @@ Verified on 2026-09-05 using JDK 26 on an Apple M5 Max.
 
 ## Protocol and transport checks
 
-`./gradlew :mcp:check` runs a plain Java verification program with **396 checks**.
+`./gradlew :mcp:check` runs a plain Java verification program (396 checks at the time;
+the task prints the current count).
 These cover strict UTF-8/JSON handling (including deterministic randomized Unicode
 round trips), reference closure, recursive DTOs, literal `$ref` properties/examples,
 Spring regex paths, parameter-name collisions, multipart arrays/JSON parts, URL
