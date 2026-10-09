@@ -4,7 +4,6 @@ import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
 import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SourcesJar
-import org.gradle.api.publish.PublishingExtension
 
 plugins {
     alias(libs.plugins.kotlin.jvm) apply false
@@ -31,28 +30,6 @@ subprojects {
 
         tasks.withType<JavaCompile>().configureEach {
             options.release.set(27)
-        }
-    }
-
-    plugins.withId("maven-publish") {
-        extensions.configure<PublishingExtension> {
-            repositories {
-                maven {
-                    name = "GitHubPackages"
-                    url = uri("https://maven.pkg.github.com/beint-no/riss")
-                    credentials {
-                        username = providers.gradleProperty("gpr.user")
-                            .orElse(providers.environmentVariable("GITHUB_ACTOR"))
-                            .orElse("beint-no")
-                            .get()
-                        password = providers.gradleProperty("gpr.key")
-                            .orElse(providers.environmentVariable("GITHUB_TOKEN"))
-                            .orElse(providers.environmentVariable("GH_TOKEN"))
-                            .orElse("")
-                            .get()
-                    }
-                }
-            }
         }
     }
 
