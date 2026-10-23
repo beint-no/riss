@@ -62,7 +62,7 @@ internal class DocumentAssembler(
             paths[scanned.path] = existing?.with(scanned.method, scanned.operation)
                 ?: PathItem(mapOf(scanned.method.lowercase() to scanned.operation))
             scanned.operation.tags().forEach { name ->
-                tags.getOrPut(name) { Tag(name, tagDescription(declared, scanned.controller, name)) }
+                val _ = tags.getOrPut(name) { Tag(name, tagDescription(declared, scanned.controller, name)) }
             }
         }
         addNamedSchemas(declared)
