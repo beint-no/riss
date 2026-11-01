@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
     kotlin("jvm")
     alias(libs.plugins.kotlin.spring)
@@ -9,7 +7,6 @@ plugins {
 
 kotlin {
     jvmToolchain(27)
-    compilerOptions.jvmTarget.set(JvmTarget.JVM_26)
 }
 
 dependencies {

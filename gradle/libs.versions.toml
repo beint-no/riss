@@ -2,7 +2,7 @@
 # version in Java because the plugin cannot read this catalog at consumer build time.
 [versions]
 kotlin = "2.5.0-Beta2"
-ksp = "2.3.12"
+ksp = "2.3.13"
 spring = "7.0.10"
 spring-boot = "4.2.0-RC1"
 servlet = "6.1.0"
