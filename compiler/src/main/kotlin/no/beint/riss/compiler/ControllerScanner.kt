@@ -404,22 +404,12 @@ internal class ControllerScanner(
         explicit: String?,
         used: MutableSet<String>,
     ): String {
-        val method = function.simpleName.asString()
-        val simple = explicit ?: method
-        val qualified = controller.simpleName.asString().replaceFirstChar(Char::lowercaseChar) + "_" + method
-        val candidate = when {
-            simple !in used -> simple
-            qualified !in used -> qualified
-            else -> {
-                var index = 2
-                var next = "${qualified}_$index"
-                while (next in used) {
-                    index++
-                    next = "${qualified}_$index"
-                }
-                next
-            }
-        }
+        // Always controller-qualified: a bare method name would move to another operation when a controller is added.
+        val base = explicit
+            ?: (controller.simpleName.asString().replaceFirstChar(Char::lowercaseChar) + "_" + function.simpleName.asString())
+        var candidate = base
+        var index = 2
+        while (candidate in used) candidate = "${base}_${index++}"
         used += candidate
         return candidate
     }
