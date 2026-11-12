@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.16"
+    id("no.beint.riss") version "0.1.17"
 }
 ```
 
@@ -75,6 +75,32 @@ The primary document is served directly at `/openapi.json`, `/v3/api-docs`, and
 to its Riss explorer. `primary-document` is optional for an application with one
 compiled document and required when several documents are present. Compatibility
 aliases are disabled by default to avoid conflicts with Springdoc or application routes.
+
+## Lint
+
+Naming and shape rules run on the assembled document in the same compiler pass. A violation fails the build, so
+an API convention holds without review. Every rule is off until configured:
+
+```kotlin
+riss {
+    lintBannedNames.set(mapOf("keyword" to "query", "currency" to "currencyCode"))
+    lintBannedSchemaSuffixes.set(listOf("Request", "Response"))
+    lintEnumPattern.set("[a-z0-9]+(_[a-z0-9]+)*")
+    lintFormatBySuffix.set(mapOf("At" to "date-time", "Date" to "date"))
+    lintPageSchemaPrefix.set("ApiPageRes")
+    lintBaseline.set(layout.projectDirectory.file("api-lint-baseline.txt"))
+}
+```
+
+* `lintBannedNames`: a query parameter or schema property must not use a banned name; the error names the one to use.
+* `lintBannedSchemaSuffixes`: component schema names must not end in these.
+* `lintEnumPattern`: every enum value must match.
+* `lintFormatBySuffix`: a name ending in the suffix must have that format.
+* `lintPageSchemaPrefix`: an operation taking `page` must also take `pageSize` and return a schema with this prefix.
+
+The baseline lists accepted violations, one key per line; text after ` #` is a comment. A key that no longer
+violates a rule also fails the build, so the baseline only shrinks. A failing build writes the keys of the new
+violations to `build/riss/lint-violations.txt`.
 
 ## Modules
 
