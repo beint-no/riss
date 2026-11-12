@@ -12,6 +12,7 @@ import java.nio.file.Path
  */
 internal data class LintOptions(
     val bannedNames: Map<String, String> = emptyMap(),
+    val bannedNamePatterns: Map<Regex, String> = emptyMap(),
     val bannedSchemaSuffixes: List<String> = emptyList(),
     val enumPattern: Regex? = null,
     val formatBySuffix: Map<String, String> = emptyMap(),
@@ -20,7 +21,7 @@ internal data class LintOptions(
     val report: Path? = null,
 ) {
     val enabled: Boolean
-        get() = bannedNames.isNotEmpty() || bannedSchemaSuffixes.isNotEmpty() || enumPattern != null ||
+        get() = bannedNames.isNotEmpty() || bannedNamePatterns.isNotEmpty() || bannedSchemaSuffixes.isNotEmpty() || enumPattern != null ||
             formatBySuffix.isNotEmpty() || pageSchemaPrefix != null
 }
 
@@ -71,6 +72,9 @@ internal class Lint(private val options: LintOptions) {
     private fun value(key: String, name: String, schema: Schema, found: MutableList<LintViolation>) {
         options.bannedNames[name]?.let { preferred ->
             found += LintViolation("NAME $key", "use '$preferred' instead of '$name'")
+        }
+        options.bannedNamePatterns.entries.firstOrNull { (pattern, _) -> pattern.matches(name) }?.let { (_, advice) ->
+            found += LintViolation("NAME $key", advice)
         }
         enum(key, schema, found)
         if (schema.ref() == null) {

@@ -33,6 +33,7 @@ internal data class RissOptions(
                 classpath = classpath(options["riss.classpathFile"]),
                 lint = LintOptions(
                     bannedNames = pairs(options["riss.lint.bannedNames"]),
+                    bannedNamePatterns = pairs(options["riss.lint.bannedNamePatterns"]).mapKeys { Regex(it.key) },
                     bannedSchemaSuffixes = csv(options["riss.lint.bannedSchemaSuffixes"]),
                     enumPattern = options["riss.lint.enumPattern"]?.takeIf(String::isNotBlank)?.let(::Regex),
                     formatBySuffix = pairs(options["riss.lint.formatBySuffix"]),

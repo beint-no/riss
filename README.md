@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.17"
+    id("no.beint.riss") version "0.1.18"
 }
 ```
 
@@ -93,6 +93,7 @@ riss {
 ```
 
 * `lintBannedNames`: a query parameter or schema property must not use a banned name; the error names the one to use.
+* `lintBannedNamePatterns`: the same for names matching a regular expression, such as `is[A-Z].*`; the value is the advice.
 * `lintBannedSchemaSuffixes`: component schema names must not end in these.
 * `lintEnumPattern`: every enum value must match.
 * `lintFormatBySuffix`: a name ending in the suffix must have that format.
