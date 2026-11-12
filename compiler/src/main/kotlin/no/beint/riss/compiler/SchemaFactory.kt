@@ -365,11 +365,10 @@ internal class SchemaFactory(
         if (sources.isEmpty()) return next
         val builder = next.toBuilder()
         sources.firstNotNullOfOrNull { it.annotation(Names.SIZE) }?.let { size ->
-            builder
-                .minLength(size.int("min")?.takeIf { it > 0 })
-                .maxLength(size.int("max")?.takeIf { it < Int.MAX_VALUE })
-                .minItems(size.int("min")?.takeIf { it > 0 })
-                .maxItems(size.int("max")?.takeIf { it < Int.MAX_VALUE })
+            val min = size.int("min")?.takeIf { it > 0 }
+            val max = size.int("max")?.takeIf { it < Int.MAX_VALUE }
+            if ("string" in next.types()) builder.minLength(min).maxLength(max)
+            if ("array" in next.types()) builder.minItems(min).maxItems(max)
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.MIN)?.int("value") }?.let {
             builder.minimum(it.toBigDecimal())

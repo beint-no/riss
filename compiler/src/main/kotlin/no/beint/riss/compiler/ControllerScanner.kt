@@ -269,18 +269,20 @@ internal class ControllerScanner(
             ?: "param"
         val type = parameter.type.resolve()
         val swagger = parameter.annotation(Names.SWAGGER_PARAMETER)
-        val required = annotation?.bool("required")
-            ?: (type.nullability != Nullability.NULLABLE && !parameter.hasDefault)
+        // Spring treats a parameter with a default value as optional whatever its required attribute says.
+        val default = annotation?.string("defaultValue")?.takeUnless { it == Names.SPRING_DEFAULT_NONE }
+        val required = default == null && (annotation?.bool("required")
+            ?: (type.nullability != Nullability.NULLABLE && !parameter.hasDefault))
+        val schema = schemas.schema(type, "$location.$name", parameter)
         return Parameter(
             name,
             "query",
             swagger?.string("description"),
             required,
-            schemas.schema(type, "$location.$name", parameter),
+            if (default.isNullOrEmpty() || schema.defaultValue() != null) schema else schema.toBuilder().defaultValue(default).build(),
             style(swagger),
             explode(swagger),
-            swagger?.string("example")
-                ?: annotation?.string("defaultValue")?.takeUnless { it == Names.SPRING_DEFAULT_NONE },
+            swagger?.string("example"),
         )
     }
 
