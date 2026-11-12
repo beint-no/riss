@@ -14,11 +14,11 @@ directory and supply an ordinary Java build; its only integration contract is JS
 
 ## Build and compile
 
-MCP is available as `no.beint.riss:mcp:0.1.19`.
+MCP is available as `no.beint.riss:mcp:0.1.20`.
 
 ```sh
 ./gradlew :mcp:build
-java -jar mcp/build/libs/mcp-0.1.19.jar compile \
+java -jar mcp/build/libs/mcp-0.1.20.jar compile \
   --spec /path/to/openapi.json \
   --out /path/to/build/mcp/catalog.json
 ```

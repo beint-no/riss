@@ -109,7 +109,7 @@ internal object OpenApiWriter {
 
     private fun schema(schema: Schema): Map<String, Any> {
         if (schema.ref() != null && schema.anyOf().isEmpty() && schema.oneOf().isEmpty()) {
-            return obj("\$ref" to schema.ref(), "description" to schema.description())
+            return obj("\$ref" to schema.ref(), "description" to schema.description(), "default" to schema.defaultValue())
         }
         val types = schema.types()
         return obj(
