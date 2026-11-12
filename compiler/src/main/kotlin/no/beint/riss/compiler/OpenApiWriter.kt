@@ -100,8 +100,11 @@ internal object OpenApiWriter {
     )
 
     private fun content(content: Map<String, MediaType>) =
-        content.mapValues { (_, media) ->
-            obj("schema" to schema(media.schema()), "example" to literal(media.example(), media.schema().types()))
+        content.mapValues { (type, media) ->
+            // Outside JSON the bytes are the body itself, not a base64 string.
+            val schema = media.schema().takeUnless { "json" !in type && it.format() == "byte" }
+                ?: media.schema().toBuilder().format("binary").build()
+            obj("schema" to schema(schema), "example" to literal(media.example(), schema.types()))
         }
 
     private fun schema(schema: Schema): Map<String, Any> {
