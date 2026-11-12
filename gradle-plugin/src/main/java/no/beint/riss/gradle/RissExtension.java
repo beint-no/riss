@@ -31,6 +31,9 @@ public abstract class RissExtension {
     /** Parameter and property names that must not be used, mapped to the name to use instead. */
     public abstract MapProperty<String, String> getLintBannedNames();
 
+    /** Regular expressions for names that must not be used, mapped to the advice shown. No commas or '=' in either. */
+    public abstract MapProperty<String, String> getLintBannedNamePatterns();
+
     /** Suffixes that component schema names must not end in. */
     public abstract ListProperty<String> getLintBannedSchemaSuffixes();
 

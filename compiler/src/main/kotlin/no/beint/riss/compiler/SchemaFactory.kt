@@ -44,8 +44,11 @@ internal class SchemaFactory(
     ): Schema {
         val sources = annotated.filterNotNull()
         val swagger = swaggerSchema(*sources.toTypedArray())
-        swagger?.string("ref")?.let { return applySwagger(Schema.ref(normalizeRef(it)), swagger) }
         val resolved = unwrap(bindings.resolve(type), bindings)
+        // A ref on a collection describes its items; the item recursion below applies it.
+        swagger?.string("ref")?.takeIf { resolved.isError || asCollection(resolved) == null }?.let {
+            return applySwagger(applyNullability(Schema.ref(normalizeRef(it)), type), swagger)
+        }
         if (resolved.isError || resolved.declaration.simpleName.asString() == "<ERROR>") {
             diagnostics.error("RISS-TYPE", location, "unresolved type", type.declaration)
             return Schema.builder().type("object").build()
@@ -215,7 +218,7 @@ internal class SchemaFactory(
                 *property.annotated.toTypedArray(),
                 bindings = bindings,
             )
-            builder.property(property.name, schema)
+            builder.property(property.name, if (property.annotated.any(::validatedNonNull)) schema.nonNull() else schema)
             if (property.required) {
                 builder.require(property.name)
             }
@@ -307,9 +310,24 @@ internal class SchemaFactory(
         }.toList()
     }
 
+    private fun validatedNonNull(source: KSAnnotated): Boolean =
+        has(source, Names.NOT_NULL) || has(source, Names.NOT_BLANK) || has(source, Names.NOT_EMPTY)
+
+    /** Bean validation rejects null for this property, so the schema must not offer it. */
+    private fun Schema.nonNull(): Schema = when {
+        anyOf().size == 2 && anyOf().any { it.types() == listOf("null") } ->
+            anyOf().first { it.types() != listOf("null") }.let { other -> description()?.let { other.toBuilder().description(it).build() } ?: other }
+        "null" in types() && types().size > 1 -> toBuilder().types(types().filter { it != "null" }).build()
+        else -> this
+    }
+
     private fun required(sources: List<KSAnnotated>, type: KSType, parameter: KSValueParameter?): Boolean {
-        if (sources.any { has(it, Names.NOT_NULL) || has(it, Names.NOT_BLANK) || has(it, Names.NOT_EMPTY) }) {
+        if (sources.any(::validatedNonNull)) {
             return true
+        }
+        when (sources.firstNotNullOfOrNull { it.annotation(Names.SWAGGER_SCHEMA)?.enumName("requiredMode") }) {
+            "REQUIRED" -> return true
+            "NOT_REQUIRED" -> return false
         }
         if (type.nullability == Nullability.NULLABLE) {
             return false

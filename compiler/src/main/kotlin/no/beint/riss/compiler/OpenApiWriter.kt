@@ -125,7 +125,7 @@ internal object OpenApiWriter {
             "multipleOf" to schema.multipleOf(),
             "minItems" to schema.minItems(),
             "maxItems" to schema.maxItems(),
-            "enum" to schema.enumValues().ifEmpty { null },
+            "enum" to schema.enumValues().ifEmpty { null }?.let { values -> if ("null" in types) values + null else values },
             "default" to literal(schema.defaultValue(), types),
             "example" to literal(schema.example(), types),
             "items" to schema.items()?.let(::schema),

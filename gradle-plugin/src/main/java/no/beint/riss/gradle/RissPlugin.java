@@ -28,6 +28,7 @@ public final class RissPlugin implements Plugin<Project> {
         extension.getVersion().convention("1");
         extension.getStrict().convention(true);
         extension.getLintBannedNames().convention(java.util.Map.of());
+        extension.getLintBannedNamePatterns().convention(java.util.Map.of());
         extension.getLintBannedSchemaSuffixes().convention(java.util.List.of());
         extension.getLintEnumPattern().convention("");
         extension.getLintFormatBySuffix().convention(java.util.Map.of());
@@ -61,6 +62,7 @@ public final class RissPlugin implements Plugin<Project> {
         ksp.arg("riss.strict", extension.getStrict().map(String::valueOf));
         ksp.arg("riss.classpathFile", classpathFile.map(file -> file.getAsFile().getAbsolutePath()));
         ksp.arg("riss.lint.bannedNames", extension.getLintBannedNames().map(RissPlugin::pairs));
+        ksp.arg("riss.lint.bannedNamePatterns", extension.getLintBannedNamePatterns().map(RissPlugin::pairs));
         ksp.arg("riss.lint.bannedSchemaSuffixes", extension.getLintBannedSchemaSuffixes().map(values -> String.join(",", values)));
         ksp.arg("riss.lint.enumPattern", extension.getLintEnumPattern());
         ksp.arg("riss.lint.formatBySuffix", extension.getLintFormatBySuffix().map(RissPlugin::pairs));

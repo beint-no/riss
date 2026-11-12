@@ -53,16 +53,20 @@ internal class DocumentAssembler(
         val paths = linkedMapOf<String, PathItem>()
         val tags = linkedMapOf<String, Tag>()
         val headers = headers(declared)
-        val defaultResponses = defaultResponses(declared).groupBy { it.code }.mapValues { (_, extras) ->
+        val declaredDefaults = defaultResponses(declared)
+        val pathVariableCodes = declaredDefaults.filter { it.pathVariablesOnly }.map { it.code }.toSet()
+        val defaultResponses = declaredDefaults.groupBy { it.code }.mapValues { (_, extras) ->
             mergeResponses(extras)
         }
         operations.sortedWith(compareBy({ it.path }, { it.method })).forEach { scanned ->
-            applyGlobals(scanned, headers, defaultResponses)
+            applyGlobals(scanned, headers, defaultResponses.filterKeys { '{' in scanned.path || it !in pathVariableCodes })
             val existing = paths[scanned.path]
             paths[scanned.path] = existing?.with(scanned.method, scanned.operation)
                 ?: PathItem(mapOf(scanned.method.lowercase() to scanned.operation))
             scanned.operation.tags().forEach { name ->
-                val _ = tags.getOrPut(name) { Tag(name, tagDescription(declared, scanned.controller, name)) }
+                if (tags[name]?.description() == null) {
+                    tags[name] = Tag(name, tagDescription(declared, scanned.controller, name))
+                }
             }
         }
         addNamedSchemas(declared)
@@ -262,6 +266,7 @@ internal class DocumentAssembler(
                 description = annotation.string("description") ?: "Error",
                 contentType = annotation.string("contentType"),
                 schemaRef = annotation.string("schemaRef"),
+                pathVariablesOnly = annotation.bool("pathVariablesOnly") == true,
             )
         }
 
@@ -347,6 +352,7 @@ internal class DocumentAssembler(
         val description: String,
         val contentType: String?,
         val schemaRef: String?,
+        val pathVariablesOnly: Boolean,
     ) {
         fun media(): Pair<String, MediaType>? {
             if (schemaRef.isNullOrBlank()) return null
