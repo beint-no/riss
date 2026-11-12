@@ -93,8 +93,7 @@ internal class ControllerScanner(
                     }
                 }
                 parameterObject(parameter) -> flattenQuery(parameter, location).forEach(builder::parameter)
-                parameter.annotation(Names.REQUEST_PARAM) != null ||
-                    parameter.annotation(Names.REQUEST_PART) != null -> {
+                parameter.annotation(Names.REQUEST_PARAM) != null -> {
                     if (!isFile(parameter.type.resolve())) {
                         builder.parameter(queryOrPartParameter(parameter, location))
                     }
@@ -117,13 +116,13 @@ internal class ControllerScanner(
         method: String,
         location: String,
     ): RequestBody? {
-        val files = function.parameters.filter { parameter ->
-            (parameter.annotation(Names.REQUEST_PARAM) != null || parameter.annotation(Names.REQUEST_PART) != null) &&
-                isFile(parameter.type.resolve())
+        val parts = function.parameters.filter { parameter ->
+            parameter.annotation(Names.REQUEST_PART) != null ||
+                (parameter.annotation(Names.REQUEST_PARAM) != null && isFile(parameter.type.resolve()))
         }
-        if (files.isNotEmpty()) {
+        if (parts.isNotEmpty()) {
             val objectSchema = Schema.builder().type("object")
-            files.forEach { parameter ->
+            parts.forEach { parameter ->
                 val name = parameterName(parameter, Names.REQUEST_PARAM)
                     ?: parameterName(parameter, Names.REQUEST_PART)
                     ?: parameter.name?.asString()
@@ -131,7 +130,8 @@ internal class ControllerScanner(
                 val type = parameter.type.resolve()
                 val schema = schemas.schema(type, "$location.$name", parameter)
                 objectSchema.property(name, schema)
-                if (type.nullability != Nullability.NULLABLE && parameter.annotation(Names.REQUEST_PARAM)?.bool("required") != false) {
+                val binding = parameter.annotation(Names.REQUEST_PART) ?: parameter.annotation(Names.REQUEST_PARAM)
+                if (type.nullability != Nullability.NULLABLE && binding?.bool("required") != false) {
                     objectSchema.require(name)
                 }
             }

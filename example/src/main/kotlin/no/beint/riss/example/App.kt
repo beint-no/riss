@@ -28,6 +28,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
+import org.springframework.web.bind.annotation.RequestPart
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
 import java.net.URI
@@ -165,6 +166,15 @@ class FeatureApi {
     @PostMapping("/{id}/icon", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun icon(@PathVariable id: Int, @RequestParam("file") file: MultipartFile): ResponseEntity<Void> =
         ResponseEntity.accepted().build()
+
+    @PostMapping("/{id}/asset", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun asset(
+        @PathVariable id: Int,
+        @Valid @RequestPart("request") request: FeatureReq,
+        @RequestPart("file") file: MultipartFile,
+        @RequestPart(name = "caption", required = false) caption: String?,
+        @RequestParam(required = false) dryRun: Boolean?,
+    ): FeatureReq = request
 
     @GetMapping("/pages")
     fun pages(): Page<FeatureRes> = Page(emptyList(), null)
