@@ -27,6 +27,11 @@ public final class RissPlugin implements Plugin<Project> {
         extension.getTitle().convention("");
         extension.getVersion().convention("1");
         extension.getStrict().convention(true);
+        extension.getLintBannedNames().convention(java.util.Map.of());
+        extension.getLintBannedSchemaSuffixes().convention(java.util.List.of());
+        extension.getLintEnumPattern().convention("");
+        extension.getLintFormatBySuffix().convention(java.util.Map.of());
+        extension.getLintPageSchemaPrefix().convention("");
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlin(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -55,6 +60,17 @@ public final class RissPlugin implements Plugin<Project> {
         ksp.arg("riss.version", extension.getVersion());
         ksp.arg("riss.strict", extension.getStrict().map(String::valueOf));
         ksp.arg("riss.classpathFile", classpathFile.map(file -> file.getAsFile().getAbsolutePath()));
+        ksp.arg("riss.lint.bannedNames", extension.getLintBannedNames().map(RissPlugin::pairs));
+        ksp.arg("riss.lint.bannedSchemaSuffixes", extension.getLintBannedSchemaSuffixes().map(values -> String.join(",", values)));
+        ksp.arg("riss.lint.enumPattern", extension.getLintEnumPattern());
+        ksp.arg("riss.lint.formatBySuffix", extension.getLintFormatBySuffix().map(RissPlugin::pairs));
+        ksp.arg("riss.lint.pageSchemaPrefix", extension.getLintPageSchemaPrefix());
+        ksp.arg("riss.lint.baseline", extension.getLintBaseline().map(file -> file.getAsFile().getAbsolutePath()).orElse(""));
+        ksp.arg("riss.lint.report", project.getLayout().getBuildDirectory().file("riss/lint-violations.txt")
+                .map(file -> file.getAsFile().getAbsolutePath()));
+        // The baseline's content decides the outcome, so an edit must rerun the processor.
+        project.getTasks().withType(KspAATask.class).configureEach(task ->
+                task.getInputs().files(extension.getLintBaseline()).optional().withPropertyName("rissLintBaseline"));
 
         var writeClasspath = project.getTasks().register("rissClasspath", RissClasspath.class, task -> {
             task.setGroup("build");
@@ -79,6 +95,12 @@ public final class RissPlugin implements Plugin<Project> {
             task.setDescription("Compiles the Riss OpenAPI document");
             task.dependsOn(kspKotlin);
         });
+    }
+
+    private static String pairs(java.util.Map<String, String> values) {
+        return values.entrySet().stream().sorted(java.util.Map.Entry.comparingByKey())
+                .map(entry -> entry.getKey() + "=" + entry.getValue())
+                .collect(java.util.stream.Collectors.joining(","));
     }
 
     private String implementationVersion(Project project) {

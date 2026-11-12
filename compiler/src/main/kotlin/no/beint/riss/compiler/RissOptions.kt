@@ -15,6 +15,7 @@ internal data class RissOptions(
     val version: String,
     val strict: Boolean,
     val classpath: List<Path>,
+    val lint: LintOptions = LintOptions(),
 ) {
     companion object {
         fun from(environment: SymbolProcessorEnvironment): RissOptions {
@@ -30,8 +31,20 @@ internal data class RissOptions(
                 version = options["riss.version"]?.takeIf(String::isNotBlank) ?: "1",
                 strict = options["riss.strict"]?.toBoolean() ?: true,
                 classpath = classpath(options["riss.classpathFile"]),
+                lint = LintOptions(
+                    bannedNames = pairs(options["riss.lint.bannedNames"]),
+                    bannedSchemaSuffixes = csv(options["riss.lint.bannedSchemaSuffixes"]),
+                    enumPattern = options["riss.lint.enumPattern"]?.takeIf(String::isNotBlank)?.let(::Regex),
+                    formatBySuffix = pairs(options["riss.lint.formatBySuffix"]),
+                    pageSchemaPrefix = options["riss.lint.pageSchemaPrefix"]?.takeIf(String::isNotBlank),
+                    baseline = options["riss.lint.baseline"]?.takeIf(String::isNotBlank)?.let(Path::of),
+                    report = options["riss.lint.report"]?.takeIf(String::isNotBlank)?.let(Path::of),
+                ),
             )
         }
+
+        private fun pairs(value: String?): Map<String, String> =
+            csv(value).associate { it.substringBefore('=').trim() to it.substringAfter('=').trim() }
 
         private fun csv(value: String?): List<String> =
             value.orEmpty().split(',').map(String::trim).filter(String::isNotEmpty)

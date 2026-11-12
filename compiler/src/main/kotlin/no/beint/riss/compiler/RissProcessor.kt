@@ -49,6 +49,7 @@ private class RissProcessor(
                     )
                 }
                 val assembled = DocumentAssembler(enumReader, schemas, diagnostics, options).assemble(operations, documentTypes)
+                if (diagnostics.isEmpty() && options.lint.enabled) Lint(options.lint).check(assembled.document, diagnostics)
                 if (diagnostics.problems.isNotEmpty()) {
                     diagnostics.problems.forEach { problem ->
                         logger.error(problem.message, problem.symbol)
