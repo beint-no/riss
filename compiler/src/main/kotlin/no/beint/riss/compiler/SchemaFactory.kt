@@ -1,6 +1,7 @@
 package no.beint.riss.compiler
 
 import com.google.devtools.ksp.getDeclaredProperties
+import com.google.devtools.ksp.isPrivate
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.KSClassDeclaration
@@ -303,6 +304,10 @@ internal class SchemaFactory(
             val sources = listOfNotNull(property, property.getter)
             val name = jsonName(sources, property.simpleName.asString())
             if (sources.any(::ignored) || ignoredName(name) || property.modifiers.contains(Modifier.JAVA_STATIC)) {
+                return@mapNotNull null
+            }
+            // Jackson does not see a private property unless it is named explicitly.
+            if (property.isPrivate() && sources.none { has(it, Names.JSON_PROPERTY) || has(it, Names.TOOLS_JSON_PROPERTY) }) {
                 return@mapNotNull null
             }
             val type = property.type.resolve()
