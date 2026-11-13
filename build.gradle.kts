@@ -14,7 +14,7 @@ plugins {
 
 allprojects {
     group = "no.beint.riss"
-    version = "0.1.20"
+    version = "0.1.21"
 }
 
 tasks.register("printReleaseVersion") {
