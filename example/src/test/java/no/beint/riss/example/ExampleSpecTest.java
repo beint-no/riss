@@ -2,11 +2,25 @@ package no.beint.riss.example;
 
 import no.beint.riss.example.generated.ExampleSpec;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.json.JsonMapper;
 import java.nio.charset.StandardCharsets;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExampleSpecTest {
+    @Test
+    void collectionAndElementSizesAreIndependent() {
+        var properties = new JsonMapper().readTree(new ExampleSpec().json())
+                .at("/components/schemas/FeatureReq/properties");
+        var tags = properties.get("tags");
+        assertEquals(100, tags.get("maxItems").asInt());
+        assertEquals(255, tags.at("/items/maxLength").asInt());
+        var labels = properties.get("labels");
+        assertEquals(20, labels.get("maxItems").asInt());
+        assertFalse(labels.get("items").has("maxLength"));
+    }
+
     @Test
     void compiledSpecIsOpenApi31Json() {
         var json = new String(new ExampleSpec().json(), StandardCharsets.UTF_8);

@@ -4,6 +4,7 @@ import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.isPrivate
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
@@ -43,12 +44,12 @@ internal class SchemaFactory(
         vararg annotated: KSAnnotated?,
         usage: SchemaUsage = SchemaUsage.NESTED,
         bindings: Bindings = Bindings.EMPTY,
+        swagger: KSAnnotation? = swaggerSchema(*annotated),
     ): Schema {
         val sources = annotated.filterNotNull()
-        val swagger = swaggerSchema(*sources.toTypedArray())
         val resolved = unwrap(bindings.resolve(type), bindings)
         // A ref on a collection describes its items; the item recursion below applies it.
-        swagger?.string("ref")?.takeIf { resolved.isError || asCollection(resolved) == null }?.let {
+        swagger?.string("ref")?.takeIf { resolved.isError || !isCollection(resolved) }?.let {
             return applySwagger(applyNullability(Schema.ref(normalizeRef(it)), type), swagger)
         }
         if (resolved.isError || resolved.declaration.simpleName.asString() == "<ERROR>") {
@@ -63,9 +64,12 @@ internal class SchemaFactory(
         if (qualified in ANY_TYPES || qualified in JSON_TREES) {
             return untyped(resolved, location, usage, sources, swagger, qualified)
         }
-        asCollection(resolved)?.let { collection ->
-            val items = collection.item?.let { schema(it, location, *sources.toTypedArray(), bindings = bindings) }
-                ?: Schema.unconstrained()
+        if (isCollection(resolved)) {
+            val argument = resolved.arguments.firstOrNull()
+            val itemType = argument?.takeUnless { it.variance == Variance.STAR }?.type
+            val items = itemType?.let {
+                schema(it.resolve(), location, it, bindings = bindings, swagger = swaggerSchema(it) ?: swagger)
+            } ?: Schema.unconstrained()
             return applyNullability(
                 applyConstraints(Schema.builder().type("array").items(items).build(), sources, swagger),
                 resolved,
@@ -96,7 +100,10 @@ internal class SchemaFactory(
         if (Modifier.VALUE in classDeclaration.modifiers || Modifier.INLINE in classDeclaration.modifiers) {
             val underlying = classDeclaration.primaryConstructor?.parameters?.singleOrNull()?.type?.resolve()
             if (underlying != null) {
-                return schema(underlying, location, classDeclaration, *sources.toTypedArray(), usage = usage, bindings = bindings)
+                return schema(
+                    underlying, location, classDeclaration, *sources.toTypedArray(), usage = usage, bindings = bindings,
+                    swagger = swaggerSchema(classDeclaration) ?: swagger,
+                )
             }
         }
         jsonValueType(classDeclaration)?.let { valueType ->
@@ -117,7 +124,7 @@ internal class SchemaFactory(
             implementationName != qualified &&
             implementationName !in IGNORE_IMPLEMENTATIONS
         ) {
-            return schema(implementation, location, *sources.toTypedArray(), usage = usage, bindings = bindings)
+            return schema(implementation, location, *sources.toTypedArray(), usage = usage, bindings = bindings, swagger = swagger)
         }
         val nextBindings = bindings.enter(classDeclaration, resolved)
         val name = componentName(classDeclaration, resolved, nextBindings)
@@ -145,7 +152,7 @@ internal class SchemaFactory(
         location: String,
         usage: SchemaUsage,
         sources: List<KSAnnotated>,
-        swagger: com.google.devtools.ksp.symbol.KSAnnotation?,
+        swagger: KSAnnotation?,
         qualified: String? = type.declaration.qualifiedName?.asString(),
     ): Schema {
         if (usage == SchemaUsage.ROOT &&
@@ -242,7 +249,7 @@ internal class SchemaFactory(
     private fun enumSchema(
         declaration: KSClassDeclaration,
         location: String,
-        swagger: com.google.devtools.ksp.symbol.KSAnnotation?,
+        swagger: KSAnnotation?,
     ): Schema {
         val jsonValue = jsonValueType(declaration)
         val propertyName = jsonValuePropertyName(declaration)
@@ -365,7 +372,7 @@ internal class SchemaFactory(
     private fun applyConstraints(
         schema: Schema,
         sources: List<KSAnnotated>,
-        swagger: com.google.devtools.ksp.symbol.KSAnnotation?,
+        swagger: KSAnnotation?,
     ): Schema {
         val next = applySwagger(schema, swagger)
         if (sources.isEmpty()) return next
@@ -406,7 +413,7 @@ internal class SchemaFactory(
 
     private fun applySwagger(
         schema: Schema,
-        swagger: com.google.devtools.ksp.symbol.KSAnnotation?,
+        swagger: KSAnnotation?,
     ): Schema {
         swagger ?: return schema
         val builder = schema.toBuilder()
@@ -514,12 +521,9 @@ internal class SchemaFactory(
         return Schema.builder().type("array").items(items).build()
     }
 
-    private fun asCollection(type: KSType): GenericArgs? {
-        if (classifierIn(type, COLLECTION_TYPES) || type.declaration.simpleName.asString().endsWith("Array") && type.arguments.isNotEmpty()) {
-            return GenericArgs(item = typeArgument(type, 0))
-        }
-        return null
-    }
+    private fun isCollection(type: KSType): Boolean =
+        classifierIn(type, COLLECTION_TYPES) ||
+            type.declaration.simpleName.asString().endsWith("Array") && type.arguments.isNotEmpty()
 
     private fun asMap(type: KSType): MapArgs? {
         if (!classifierIn(type, MAP_TYPES)) return null
@@ -654,7 +658,7 @@ internal class SchemaFactory(
         return next
     }
 
-    private fun swaggerSchema(vararg annotated: KSAnnotated?): com.google.devtools.ksp.symbol.KSAnnotation? =
+    private fun swaggerSchema(vararg annotated: KSAnnotated?): KSAnnotation? =
         annotated.filterNotNull().firstNotNullOfOrNull { source ->
             source.annotation(Names.SWAGGER_SCHEMA)
                 ?: source.annotation(Names.SWAGGER_ARRAY_SCHEMA)?.annotation("schema")
@@ -711,8 +715,6 @@ internal class SchemaFactory(
         val required: Boolean,
         val annotated: List<KSAnnotated>,
     )
-
-    private data class GenericArgs(val item: KSType?)
 
     private data class MapArgs(val value: KSType?)
 
