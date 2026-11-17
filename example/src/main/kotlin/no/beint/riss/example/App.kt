@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Positive
+import jakarta.validation.constraints.Size
 import no.beint.riss.ParameterObject
 import no.beint.riss.RissDefaultResponse
 import no.beint.riss.RissDocument
@@ -106,6 +107,10 @@ data class FeatureFilter(
 )
 
 data class FeatureReq(
+    @field:Size(max = 100)
+    val tags: List<@Size(max = 255) String> = emptyList(),
+    @field:Size(max = 20)
+    val labels: List<String> = emptyList(),
     @field:NotBlank
     val name: String,
     val description: String? = null,
