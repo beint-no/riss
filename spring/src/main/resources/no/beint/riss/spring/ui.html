@@ -324,7 +324,7 @@
       if (schema.properties) {
         const required = new Set(schema.required || []);
         return `<div class="schema">${Object.entries(schema.properties).map(([name, prop]) => {
-          const nested = prop.properties || prop.$ref || prop.items?.$ref || prop.items?.properties
+          const nested = prop.properties || prop.$ref || prop.anyOf || prop.oneOf || prop.items?.$ref || prop.items?.properties || prop.items?.anyOf || prop.items?.oneOf
             ? schemaTree(prop.items || prop, spec, depth + 1)
             : "";
           return `<div class="field" style="--d:${depth}">
@@ -345,8 +345,9 @@
 
     const firstSchema = (content) => {
       if (!content) return { schema: null, example: null, type: null };
-      const json = content["application/json"] || Object.values(content)[0];
-      return { schema: json?.schema, example: json?.example, type: Object.keys(content)[0] };
+      const type = content["application/json"] ? "application/json" : Object.keys(content)[0];
+      const media = content[type];
+      return { schema: media?.schema, example: media?.example, type };
     };
 
     const curlFor = (spec, method, path, op) => {
@@ -368,7 +369,20 @@
       });
       const body = firstSchema(op.requestBody?.content);
       if (body.schema && method !== "GET" && method !== "HEAD") {
-        headers.push("-H 'Content-Type: application/json'");
+        if (body.type === "multipart/form-data") {
+          const props = resolve(body.schema, spec)?.properties || {};
+          const parts = Object.entries(props).map(([name, prop]) => {
+            const resolved = resolve(prop, spec);
+            const item = [].concat(resolved?.type || []).includes("array") ? resolve(resolved.items, spec) : resolved;
+            if (item?.format === "binary") return `-F '${name}=@<file>'`;
+            if (resolved?.properties || resolved?.additionalProperties) {
+              return `-F '${name}=${JSON.stringify(preview(prop, spec))};type=application/json'`;
+            }
+            return `-F '${name}=${preview(prop, spec)}'`;
+          });
+          return `curl -X ${method} ${[...headers, ...parts].join(" ")} ${JSON.stringify(url.toString())}`;
+        }
+        headers.push(`-H 'Content-Type: ${body.type || "application/json"}'`);
         const sample = body.example ?? preview(body.schema, spec);
         const json = typeof sample === "string" ? sample : JSON.stringify(sample);
         return `curl -X ${method} ${headers.join(" ")} --data ${JSON.stringify(json)} ${JSON.stringify(url.toString())}`;
