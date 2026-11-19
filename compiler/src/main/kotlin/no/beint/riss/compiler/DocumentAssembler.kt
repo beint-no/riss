@@ -171,22 +171,32 @@ internal class DocumentAssembler(
                 val propertyName = property.string("name") ?: return@forEach
                 val ref = property.string("ref")
                 val type = property.string("type") ?: "string"
-                val schema = if (ref != null) {
+                val description = property.string("description")
+                val example = property.string("example")
+                val built = if (ref != null) {
                     val target = Schema.ref(if (ref.startsWith("#/")) ref else "#/components/schemas/$ref")
                     if (type == "array") {
-                        Schema.builder().type("array").items(target).build()
+                        Schema.builder()
+                            .type("array")
+                            .items(target)
+                            .description(description)
+                            .example(example)
+                            .build()
                     } else {
-                        target
+                        target.toBuilder()
+                            .description(description)
+                            .example(example)
+                            .build()
                     }
                 } else {
-                    val built = Schema.builder()
+                    Schema.builder()
                         .type(type)
                         .format(property.string("format"))
-                        .description(property.string("description"))
-                        .example(property.string("example"))
+                        .description(description)
+                        .example(example)
                         .build()
-                    if (property.bool("nullable") == true) built.nullable() else built
                 }
+                val schema = if (property.bool("nullable") == true) built.nullable() else built
                 builder.property(propertyName, schema)
             }
             schemas.named(name, builder.build())

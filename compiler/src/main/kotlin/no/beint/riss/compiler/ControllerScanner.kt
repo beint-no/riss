@@ -106,7 +106,7 @@ internal class ControllerScanner(
             diagnostics.error("RISS-PATH", location, "path variable {$name} has no @PathVariable", function)
         }
         requestBody(function, mapping, method, location)?.let(builder::requestBody)
-        responses(function, mapping, location).forEach { (code, response) -> builder.response(code, response) }
+        responses(controller, function, mapping, location).forEach { (code, response) -> builder.response(code, response) }
         return builder.build()
     }
 
@@ -122,22 +122,27 @@ internal class ControllerScanner(
         }
         if (parts.isNotEmpty()) {
             val objectSchema = Schema.builder().type("object")
+            var anyRequired = false
             parts.forEach { parameter ->
                 val name = parameterName(parameter, Names.REQUEST_PARAM)
                     ?: parameterName(parameter, Names.REQUEST_PART)
                     ?: parameter.name?.asString()
                     ?: "file"
                 val type = parameter.type.resolve()
-                val schema = schemas.schema(type, "$location.$name", parameter)
+                val baseSchema = schemas.schema(type, "$location.$name", parameter)
+                val description = baseSchema.description()?.takeUnless { it == "Any JSON value" }
+                    ?: parameter.annotation(Names.SWAGGER_PARAMETER)?.string("description")
+                val schema = if (description != null) baseSchema.withDescription(description) else baseSchema
                 objectSchema.property(name, schema)
                 val binding = parameter.annotation(Names.REQUEST_PART) ?: parameter.annotation(Names.REQUEST_PARAM)
                 if (type.nullability != Nullability.NULLABLE && binding?.bool("required") != false) {
                     objectSchema.require(name)
+                    anyRequired = true
                 }
             }
             return RequestBody(
                 null,
-                true,
+                anyRequired,
                 mapOf(
                     (mapping.consumes.singleOrNull() ?: "multipart/form-data") to MediaType(objectSchema.build()),
                 ),
@@ -169,18 +174,19 @@ internal class ControllerScanner(
     }
 
     private fun responses(
+        controller: KSClassDeclaration,
         function: KSFunctionDeclaration,
         mapping: Mapping,
         location: String,
     ): Map<String, Response> {
-        val declared = swaggerResponses(function)
+        val declared = swaggerResponses(controller, function)
         val result = linkedMapOf<String, Response>()
         declared.forEach { annotation ->
             val code = annotation.string("responseCode") ?: "200"
             val description = annotation.string("description") ?: defaultDescription(code)
             val contents = annotation.annotations("content")
             if (contents.isEmpty()) {
-                val success = if (code.startsWith("2")) successResponse(function, mapping, location) else Response.of(description)
+                val success = if (code.startsWith("2")) successResponse(function, mapping, location, description) else Response.of(description)
                 result[code] = if (code.startsWith("2") && success.content().isNotEmpty()) {
                     Response(description, success.content())
                 } else {
@@ -203,23 +209,43 @@ internal class ControllerScanner(
             }
         }
         if (result.keys.none { it.startsWith("2") }) {
-            result["200"] = successResponse(function, mapping, location)
+            val (code, reason) = responseStatus(controller, function)
+            val description = reason ?: defaultDescription(code)
+            result.putIfAbsent(
+                code,
+                if (code == "204") Response.of(description) else successResponse(function, mapping, location, description),
+            )
         }
         return result
+    }
+
+    private fun responseStatus(controller: KSClassDeclaration, function: KSFunctionDeclaration): Pair<String, String?> {
+        val annotation = function.annotation(Names.RESPONSE_STATUS)
+            ?: controller.annotation(Names.RESPONSE_STATUS)
+            ?: return "200" to null
+        val code = annotation.enumName("code")
+        val value = annotation.enumName("value")
+        val chosen = when {
+            code != null && code != "INTERNAL_SERVER_ERROR" -> code
+            value != null && value != "INTERNAL_SERVER_ERROR" -> value
+            else -> code ?: value
+        }
+        return (HTTP_STATUS_CODES[chosen] ?: "200") to annotation.string("reason")
     }
 
     private fun successResponse(
         function: KSFunctionDeclaration,
         mapping: Mapping,
         location: String,
+        description: String = "OK",
     ): Response {
-        val type = schemas.unwrap(function.returnType?.resolve() ?: return Response.of("OK"))
+        val type = schemas.unwrap(function.returnType?.resolve() ?: return Response.of(description))
         val qualified = type.declaration.qualifiedName?.asString()
         if (qualified == null || qualified in VOID_TYPES) {
-            return Response.of("OK")
+            return Response.of(description)
         }
         val media = mapping.produces.singleOrNull() ?: "application/json"
-        return Response("OK", mapOf(media to MediaType(schemas.schema(type, location, usage = SchemaUsage.ROOT))))
+        return Response(description, mapOf(media to MediaType(schemas.schema(type, location, usage = SchemaUsage.ROOT))))
     }
 
     private fun successSchema(function: KSFunctionDeclaration, location: String): Schema {
@@ -231,11 +257,17 @@ internal class ControllerScanner(
         return schemas.schema(type, location, usage = SchemaUsage.ROOT)
     }
 
-    private fun swaggerResponses(function: KSFunctionDeclaration): List<KSAnnotation> {
-        val nested = function.annotation(Names.SWAGGER_API_RESPONSES)?.annotations("value").orEmpty()
-        val direct = function.annotationsNamed(Names.SWAGGER_API_RESPONSE)
-        val operation = function.annotation(Names.SWAGGER_OPERATION)?.annotations("responses").orEmpty()
-        return (direct + nested + operation).distinctBy { it.string("responseCode") }
+    private fun swaggerResponses(controller: KSClassDeclaration, function: KSFunctionDeclaration): List<KSAnnotation> {
+        val fromFunction = directResponses(function) +
+            function.annotation(Names.SWAGGER_OPERATION)?.annotations("responses").orEmpty()
+        val fromController = directResponses(controller)
+        return (fromFunction + fromController).distinctBy { it.string("responseCode") ?: "200" }
+    }
+
+    private fun directResponses(host: KSAnnotated): List<KSAnnotation> {
+        val nested = host.annotation(Names.SWAGGER_API_RESPONSES)?.annotations("value").orEmpty()
+        val direct = host.annotationsNamed(Names.SWAGGER_API_RESPONSE)
+        return direct + nested
     }
 
     private fun pathParameter(
@@ -530,6 +562,7 @@ internal class ControllerScanner(
     private fun defaultDescription(code: String): String = when (code) {
         "200" -> "OK"
         "201" -> "Created"
+        "202" -> "Accepted"
         "204" -> "No content"
         "400" -> "Bad request"
         "401" -> "Unauthorized"
@@ -586,5 +619,70 @@ internal class ControllerScanner(
             "org.springframework.web.bind.support.SessionStatus",
         )
         val HIDDEN_PARAMETER_NAMES = setOf("authentication", "session", "principal")
+        val HTTP_STATUS_CODES = mapOf(
+            "CONTINUE" to "100",
+            "SWITCHING_PROTOCOLS" to "101",
+            "PROCESSING" to "102",
+            "EARLY_HINTS" to "103",
+            "OK" to "200",
+            "CREATED" to "201",
+            "ACCEPTED" to "202",
+            "NON_AUTHORITATIVE_INFORMATION" to "203",
+            "NO_CONTENT" to "204",
+            "RESET_CONTENT" to "205",
+            "PARTIAL_CONTENT" to "206",
+            "MULTI_STATUS" to "207",
+            "ALREADY_REPORTED" to "208",
+            "IM_USED" to "226",
+            "MULTIPLE_CHOICES" to "300",
+            "MOVED_PERMANENTLY" to "301",
+            "FOUND" to "302",
+            "SEE_OTHER" to "303",
+            "NOT_MODIFIED" to "304",
+            "TEMPORARY_REDIRECT" to "307",
+            "PERMANENT_REDIRECT" to "308",
+            "BAD_REQUEST" to "400",
+            "UNAUTHORIZED" to "401",
+            "PAYMENT_REQUIRED" to "402",
+            "FORBIDDEN" to "403",
+            "NOT_FOUND" to "404",
+            "METHOD_NOT_ALLOWED" to "405",
+            "NOT_ACCEPTABLE" to "406",
+            "PROXY_AUTHENTICATION_REQUIRED" to "407",
+            "REQUEST_TIMEOUT" to "408",
+            "CONFLICT" to "409",
+            "GONE" to "410",
+            "LENGTH_REQUIRED" to "411",
+            "PRECONDITION_FAILED" to "412",
+            "CONTENT_TOO_LARGE" to "413",
+            "PAYLOAD_TOO_LARGE" to "413",
+            "URI_TOO_LONG" to "414",
+            "UNSUPPORTED_MEDIA_TYPE" to "415",
+            "REQUESTED_RANGE_NOT_SATISFIABLE" to "416",
+            "EXPECTATION_FAILED" to "417",
+            "I_AM_A_TEAPOT" to "418",
+            "UNPROCESSABLE_CONTENT" to "422",
+            "UNPROCESSABLE_ENTITY" to "422",
+            "LOCKED" to "423",
+            "FAILED_DEPENDENCY" to "424",
+            "TOO_EARLY" to "425",
+            "UPGRADE_REQUIRED" to "426",
+            "PRECONDITION_REQUIRED" to "428",
+            "TOO_MANY_REQUESTS" to "429",
+            "REQUEST_HEADER_FIELDS_TOO_LARGE" to "431",
+            "UNAVAILABLE_FOR_LEGAL_REASONS" to "451",
+            "INTERNAL_SERVER_ERROR" to "500",
+            "NOT_IMPLEMENTED" to "501",
+            "BAD_GATEWAY" to "502",
+            "SERVICE_UNAVAILABLE" to "503",
+            "GATEWAY_TIMEOUT" to "504",
+            "HTTP_VERSION_NOT_SUPPORTED" to "505",
+            "VARIANT_ALSO_NEGOTIATES" to "506",
+            "INSUFFICIENT_STORAGE" to "507",
+            "LOOP_DETECTED" to "508",
+            "BANDWIDTH_LIMIT_EXCEEDED" to "509",
+            "NOT_EXTENDED" to "510",
+            "NETWORK_AUTHENTICATION_REQUIRED" to "511",
+        )
     }
 }

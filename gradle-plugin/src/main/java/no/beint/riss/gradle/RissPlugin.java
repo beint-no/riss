@@ -18,7 +18,8 @@ public final class RissPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
         var extension = project.getExtensions().create("riss", RissExtension.class);
-        extension.getGeneratedPackage().convention(project.provider(() -> generatedPackage(project)));
+        extension.getGeneratedPackage().convention(generatedPackage(project));
+        project.afterEvaluate(evaluated -> extension.getGeneratedPackage().convention(generatedPackage(evaluated)));
         extension.getRegistryName().convention("RissSpec");
         extension.getSpecName().convention("api");
         extension.getScanPackages().convention(java.util.List.of());

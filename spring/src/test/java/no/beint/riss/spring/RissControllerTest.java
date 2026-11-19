@@ -207,6 +207,17 @@ class RissControllerTest {
     }
 
     @Test
+    void explorerHandlesNullableRefsAndMultipartCurl() throws Exception {
+        String template;
+        try (var resource = RissController.class.getResourceAsStream("ui.html")) {
+            template = new String(resource.readAllBytes(), StandardCharsets.UTF_8);
+        }
+        if (!template.contains("prop.anyOf") || !template.contains("body.type === \"multipart/form-data\"")) {
+            throw new AssertionError("Expected ui.html to expand nullable refs and format multipart curl");
+        }
+    }
+
+    @Test
     void uiCanBeDisabled() throws Exception {
         var properties = new RissProperties();
         properties.setUiEnabled(false);

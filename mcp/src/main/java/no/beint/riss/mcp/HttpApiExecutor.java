@@ -54,7 +54,7 @@ public final class HttpApiExecutor implements McpExecutor, AutoCloseable {
             throw new IllegalArgumentException("Unsafe request path");
         var uri = URI.create(origin + basePath + request.path());
         var body = request.body();
-        var builder = HttpRequest.newBuilder(uri).timeout(timeout).header("Accept", "application/json")
+        var builder = HttpRequest.newBuilder(uri).timeout(timeout).header("Accept", "application/json, application/problem+json, */*;q=0.8")
                 .method(request.method(), body.length == 0 ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofByteArray(body));
         request.headers().forEach(builder::setHeader);
         headers.forEach(builder::setHeader);

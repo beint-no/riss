@@ -18,25 +18,67 @@ public final class McpRuntime {
     public static final int MAX_REQUEST_BYTES = 1024 * 1024;
     private static final String CURRENT = PROTOCOL_VERSIONS.getFirst();
     private static final String VERSION_META = "io.modelcontextprotocol/protocolVersion";
+    private static final byte[] CLOSE_OBJECT = new byte[]{'}'};
     private final Map<String, CompiledTool> tools;
     private final byte[] toolList;
     private final Map<String, Object> info;
     private final McpExecutor executor;
     private final int maxRequestBytes;
 
+    /** Returns the packaged Riss MCP implementation version, or {@code "unknown"} when running outside a JAR. */
+    public static String version() {
+        var version = McpRuntime.class.getPackage().getImplementationVersion();
+        return version == null || version.isBlank() ? "unknown" : version;
+    }
+
     public static final class Reply {
         private final int status;
-        private final byte[] body;
+        private final byte[][] chunks;
+        private final int size;
         private final boolean unknownId;
+
         private Reply(int status, byte[] body) { this(status, body, false); }
-        private Reply(int status, byte[] body, boolean unknownId) { this.status = status; this.body = body; this.unknownId = unknownId; }
+
+        private Reply(int status, byte[] body, boolean unknownId) {
+            this.status = status;
+            this.chunks = new byte[][]{body};
+            this.size = body.length;
+            this.unknownId = unknownId;
+        }
+
+        private Reply(int status, byte[]... chunks) {
+            this.status = status;
+            this.chunks = chunks;
+            int total = 0;
+            for (var chunk : chunks) total += chunk.length;
+            this.size = total;
+            this.unknownId = false;
+        }
+
         public int status() { return status; }
-        public byte[] body() { return body.clone(); }
-        public int size() { return body.length; }
-        public void writeTo(java.io.OutputStream output) throws IOException { output.write(body); }
+
+        public byte[] body() {
+            if (chunks.length == 1) return chunks[0].clone();
+            var combined = new byte[size];
+            int offset = 0;
+            for (var chunk : chunks) {
+                System.arraycopy(chunk, 0, combined, offset, chunk.length);
+                offset += chunk.length;
+            }
+            return combined;
+        }
+
+        public int size() { return size; }
+
+        public void writeTo(java.io.OutputStream output) throws IOException {
+            for (var chunk : chunks) {
+                if (chunk.length > 0) output.write(chunk);
+            }
+        }
+
         Reply forVersion(String version) {
             if (!unknownId || !CURRENT.equals(version)) return this;
-            var message = Json.object(Json.parse(body));
+            var message = Json.object(Json.parse(chunks[0]));
             message.remove("id");
             return new Reply(status, Json.bytes(message));
         }
@@ -155,11 +197,7 @@ public final class McpRuntime {
     private Reply list(Object id, Map<String, Object> params) {
         if (params.containsKey("cursor")) return error(200, id, -32602, "Tool discovery is not paginated; request tools/list without a cursor");
         var prefix = ("{\"jsonrpc\":\"2.0\",\"id\":" + Json.write(id) + ",\"result\":").getBytes(StandardCharsets.UTF_8);
-        var response = new byte[prefix.length + toolList.length + 1];
-        System.arraycopy(prefix, 0, response, 0, prefix.length);
-        System.arraycopy(toolList, 0, response, prefix.length, toolList.length);
-        response[response.length - 1] = '}';
-        return new Reply(200, response);
+        return new Reply(200, prefix, toolList, CLOSE_OBJECT);
     }
 
     private Reply call(Object id, Map<String, Object> params, McpExecutor requestExecutor, java.util.function.Consumer<SchemaDiagnostic> diagnostics) {

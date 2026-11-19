@@ -11,7 +11,10 @@ mavenPublishing {
 }
 
 tasks.jar {
-    manifest.attributes("Main-Class" to "no.beint.riss.mcp.Main")
+    manifest.attributes(
+        "Main-Class" to "no.beint.riss.mcp.Main",
+        "Implementation-Version" to project.version,
+    )
 }
 
 val verifyMcp = tasks.register<JavaExec>("verifyMcp") {

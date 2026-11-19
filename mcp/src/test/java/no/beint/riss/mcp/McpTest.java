@@ -122,6 +122,12 @@ public final class McpTest {
             calls.incrementAndGet();
             return new McpResponse(200, "application/json", Json.bytes(Json.map("name", "test")));
         });
+        check(!McpRuntime.version().isBlank());
+        var listReply = runtime.handle(rpc("tools/list", Map.of()), null);
+        var streamed = new java.io.ByteArrayOutputStream();
+        try { listReply.writeTo(streamed); } catch (IOException e) { throw new AssertionError(e); }
+        equal(listReply.size(), listReply.body().length);
+        check(Arrays.equals(listReply.body(), streamed.toByteArray()));
         var initialized = result(runtime.handle(rpc("initialize", Json.map("protocolVersion", "2025-11-25", "capabilities", Map.of(), "clientInfo", Json.map("name", "test", "version", "1"))), Map.of()));
         equal(initialized.get("protocolVersion"), "2025-11-25");
         for (var version : McpRuntime.PROTOCOL_VERSIONS) {
@@ -230,7 +236,10 @@ public final class McpTest {
         backend.setExecutor(backendWorkers);
         backend.createContext("/api/items", exchange -> {
             try (exchange) {
-                captured.set(Json.map("authorization", exchange.getRequestHeaders().getFirst("Authorization"), "tenant", exchange.getRequestHeaders().getFirst("X-Tenant-Id"))
+                captured.set(Json.map(
+                        "authorization", exchange.getRequestHeaders().getFirst("Authorization"),
+                        "tenant", exchange.getRequestHeaders().getFirst("X-Tenant-Id"),
+                        "accept", exchange.getRequestHeaders().getFirst("Accept"))
                         .entrySet().stream().collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> String.valueOf(entry.getValue()))));
                 int status = exchange.getRequestURI().getPath().endsWith("redirect") ? 302 : 200;
                 exchange.getResponseHeaders().set("Location", "http://127.0.0.1:1/never-follow");
@@ -257,7 +266,10 @@ public final class McpTest {
             var reply = client.send(post(uri, call).build(), HttpResponse.BodyHandlers.ofByteArray());
             equal(reply.statusCode(), 200);
             equal(Json.object(Json.object(Json.parse(reply.body())).get("result")).get("isError"), false);
-            equal(captured.get(), Map.of("authorization", "Bearer upstream-secret", "tenant", "9"));
+            equal(captured.get(), Map.of(
+                    "authorization", "Bearer upstream-secret",
+                    "tenant", "9",
+                    "accept", "application/json, application/problem+json, */*;q=0.8"));
             equal(client.send(post(uri, call).setHeader("Authorization", "Bearer wrong").build(), HttpResponse.BodyHandlers.discarding()).statusCode(), 401);
             equal(client.send(post(uri, call).setHeader("Authorization", "bearer mcp-secret").build(), HttpResponse.BodyHandlers.discarding()).statusCode(), 200);
             equal(client.send(post(uri, call).header("Origin", "https://evil.example").build(), HttpResponse.BodyHandlers.discarding()).statusCode(), 403);
