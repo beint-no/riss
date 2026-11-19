@@ -4,11 +4,19 @@ import kotlin.Deprecated as Legacy
 
 import com.fasterxml.jackson.annotation.JsonValue
 import io.swagger.v3.oas.annotations.Operation
+import io.swagger.v3.oas.annotations.Parameter
+import io.swagger.v3.oas.annotations.media.ArraySchema
 import io.swagger.v3.oas.annotations.media.Schema
 import io.swagger.v3.oas.annotations.responses.ApiResponse
+import io.swagger.v3.oas.annotations.responses.ApiResponses
 import io.swagger.v3.oas.annotations.tags.Tag
 import jakarta.validation.Valid
+import jakarta.validation.constraints.DecimalMax
+import jakarta.validation.constraints.DecimalMin
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.NotEmpty
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import no.beint.riss.ParameterObject
@@ -21,8 +29,10 @@ import no.beint.riss.RissSecurityScheme
 import no.beint.riss.RissStringSchema
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
+import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
@@ -30,8 +40,10 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RequestPart
+import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.multipart.MultipartFile
+import java.math.BigDecimal
 import java.net.URI
 
 @SpringBootApplication
@@ -80,7 +92,9 @@ fun main(args: Array<String>) {
         RissProperty(name = "title", nullable = true, example = "Invalid request"),
         RissProperty(name = "status", type = "integer", format = "int32", example = "400"),
         RissProperty(name = "detail", nullable = true),
-        RissProperty(name = "fieldErrors", type = "array", ref = "FieldError"),
+        RissProperty(name = "fieldErrors", type = "array", ref = "FieldError", description = "Validation errors", example = "[]"),
+        RissProperty(name = "primaryError", ref = "FieldError", nullable = true, description = "First validation error", example = "{\"field\":\"status\"}"),
+        RissProperty(name = "rootError", ref = "FieldError", description = "Root error", example = "{\"field\":\"name\"}"),
     ],
 )
 @RissGlobalHeader(
@@ -197,4 +211,104 @@ class FeatureApi {
 class HealthApi {
     @GetMapping
     fun health(): Map<String, String> = mapOf("status" to "ok")
+}
+
+@JvmInline
+value class TenantCode(val raw: String)
+
+@Schema(description = "Class enum description")
+enum class Priority {
+    LOW,
+    HIGH,
+}
+
+@Schema(description = "Address DTO description")
+data class AddressDto(
+    val street: String,
+)
+
+data class ContractReq(
+    @field:Schema(description = "Primary address", defaultValue = "{}", example = "{\"street\":\"Main\"}")
+    val primaryAddress: AddressDto,
+    @field:Schema(description = "Optional billing address", example = "{\"street\":\"Billing\"}")
+    val billingAddress: AddressDto? = null,
+    @field:Schema(description = "Required probe result")
+    val probeResult: ProbeResult,
+    @field:Schema(description = "Optional probe result")
+    val optionalProbeResult: ProbeResult? = null,
+    @field:Schema(description = "Feature tags", example = "[\"alpha\"]")
+    val describedTags: List<String>,
+    @field:Schema(ref = "CurrencyCode", description = "Supported currencies")
+    val currencies: List<String>,
+    @field:ArraySchema(
+        schema = Schema(description = "One note"),
+        arraySchema = Schema(description = "All notes"),
+    )
+    val notes: List<String>,
+    @field:Positive
+    val amount: BigDecimal,
+    @field:Positive
+    val count: Int,
+    @field:DecimalMin(value = "0.5", inclusive = false)
+    @field:DecimalMax(value = "99.5", inclusive = false)
+    val exclusiveRate: BigDecimal,
+    @field:DecimalMin("1.0")
+    @field:DecimalMax("10.0")
+    val inclusiveRate: BigDecimal,
+    @field:Min(3_000_000_000L)
+    @field:Max(9_000_000_000L)
+    val bigId: Long,
+    @field:NotBlank
+    val blankChecked: String,
+    @field:NotBlank
+    @field:Size(min = 3, max = 50)
+    val sizedBlankChecked: String,
+    @field:NotEmpty
+    val nonEmptyList: List<String>,
+    @field:NotEmpty
+    val nonEmptyText: String,
+    @field:NotEmpty
+    val nonEmptyMap: Map<String, String>,
+    @field:Size(min = 1, max = 10)
+    val scores: Map<String, @Positive Int>,
+    val tenantCode: TenantCode,
+    val optionalTenantCode: TenantCode? = null,
+    val defaultPriority: Priority,
+    @field:Schema(description = "Field enum description")
+    val overridePriority: Priority,
+    val componentId: String,
+)
+
+@RestController
+@RequestMapping("/api/contracts")
+@Tag(name = "Contracts")
+@ApiResponses(
+    ApiResponse(responseCode = "403", description = "Controller forbidden"),
+    ApiResponse(responseCode = "404", description = "Controller not found"),
+)
+class ContractApi {
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@Valid @RequestBody request: ContractReq): ContractReq = request
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(code = HttpStatus.NO_CONTENT)
+    @ApiResponse(responseCode = "404", description = "Contract not found")
+    fun delete(@PathVariable id: Long) {}
+
+    @PostMapping("/optional-upload", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun optionalUpload(
+        @Parameter(description = "Optional upload note")
+        @RequestPart(name = "note", required = false)
+        note: String?,
+    ): Map<String, String> = mapOf("note" to (note ?: ""))
+}
+
+@RestController
+@RequestMapping("/api/jobs")
+@Tag(name = "Jobs")
+@ResponseStatus(HttpStatus.ACCEPTED)
+class JobApi {
+    @PostMapping
+    fun enqueue(): Map<String, String> = mapOf("status" to "queued")
 }

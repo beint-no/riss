@@ -30,10 +30,14 @@ public final class Schema {
     private final Integer maxLength;
     private final BigDecimal minimum;
     private final BigDecimal maximum;
+    private final BigDecimal exclusiveMinimum;
+    private final BigDecimal exclusiveMaximum;
     private final BigDecimal multipleOf;
     private final String pattern;
     private final Integer minItems;
     private final Integer maxItems;
+    private final Integer minProperties;
+    private final Integer maxProperties;
 
     private Schema(Builder builder) {
         this.ref = builder.ref;
@@ -54,10 +58,14 @@ public final class Schema {
         this.maxLength = builder.maxLength;
         this.minimum = builder.minimum;
         this.maximum = builder.maximum;
+        this.exclusiveMinimum = builder.exclusiveMinimum;
+        this.exclusiveMaximum = builder.exclusiveMaximum;
         this.multipleOf = builder.multipleOf;
         this.pattern = builder.pattern;
         this.minItems = builder.minItems;
         this.maxItems = builder.maxItems;
+        this.minProperties = builder.minProperties;
+        this.maxProperties = builder.maxProperties;
     }
 
     public static Schema ref(String ref) {
@@ -154,6 +162,14 @@ public final class Schema {
         return maximum;
     }
 
+    public BigDecimal exclusiveMinimum() {
+        return exclusiveMinimum;
+    }
+
+    public BigDecimal exclusiveMaximum() {
+        return exclusiveMaximum;
+    }
+
     public BigDecimal multipleOf() {
         return multipleOf;
     }
@@ -170,6 +186,14 @@ public final class Schema {
         return maxItems;
     }
 
+    public Integer minProperties() {
+        return minProperties;
+    }
+
+    public Integer maxProperties() {
+        return maxProperties;
+    }
+
     public Schema withDescription(String description) {
         if (Objects.equals(this.description, description)) {
             return this;
@@ -179,7 +203,12 @@ public final class Schema {
 
     public Schema nullable() {
         if (ref != null) {
-            return nullableRef(ref);
+            return builder()
+                    .anyOf(List.of(ref(ref), builder().types(List.of("null")).build()))
+                    .description(description)
+                    .defaultValue(defaultValue)
+                    .example(example)
+                    .build();
         }
         if (types.isEmpty() || types.contains("null")) {
             return this;
@@ -206,10 +235,14 @@ public final class Schema {
                 .maxLength(maxLength)
                 .minimum(minimum)
                 .maximum(maximum)
+                .exclusiveMinimum(exclusiveMinimum)
+                .exclusiveMaximum(exclusiveMaximum)
                 .multipleOf(multipleOf)
                 .pattern(pattern)
                 .minItems(minItems)
-                .maxItems(maxItems);
+                .maxItems(maxItems)
+                .minProperties(minProperties)
+                .maxProperties(maxProperties);
         properties.forEach(builder::property);
         required.forEach(builder::require);
         if (additionalPropertiesAllowed != null) {
@@ -237,10 +270,14 @@ public final class Schema {
         private Integer maxLength;
         private BigDecimal minimum;
         private BigDecimal maximum;
+        private BigDecimal exclusiveMinimum;
+        private BigDecimal exclusiveMaximum;
         private BigDecimal multipleOf;
         private String pattern;
         private Integer minItems;
         private Integer maxItems;
+        private Integer minProperties;
+        private Integer maxProperties;
 
         public Builder ref(String ref) {
             this.ref = emptyToNull(ref);
@@ -361,6 +398,16 @@ public final class Schema {
             return this;
         }
 
+        public Builder exclusiveMinimum(BigDecimal exclusiveMinimum) {
+            this.exclusiveMinimum = exclusiveMinimum;
+            return this;
+        }
+
+        public Builder exclusiveMaximum(BigDecimal exclusiveMaximum) {
+            this.exclusiveMaximum = exclusiveMaximum;
+            return this;
+        }
+
         public Builder multipleOf(BigDecimal multipleOf) {
             this.multipleOf = multipleOf;
             return this;
@@ -378,6 +425,16 @@ public final class Schema {
 
         public Builder maxItems(Integer maxItems) {
             this.maxItems = maxItems;
+            return this;
+        }
+
+        public Builder minProperties(Integer minProperties) {
+            this.minProperties = minProperties;
+            return this;
+        }
+
+        public Builder maxProperties(Integer maxProperties) {
+            this.maxProperties = maxProperties;
             return this;
         }
 

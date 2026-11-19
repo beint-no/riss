@@ -2,10 +2,14 @@ package no.beint.riss.compiler
 
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.KSAnnotated
+import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFile
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSName
+import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeReference
 import com.google.devtools.ksp.symbol.KSValueParameter
 import org.junit.jupiter.api.io.TempDir
 import java.lang.reflect.Proxy
@@ -15,6 +19,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class CompilerCacheTest {
@@ -51,6 +57,55 @@ class CompilerCacheTest {
             AnnotationIndex.reset()
             host.annotation(Names.RISS_IGNORE)
             assertEquals(3, reads.get())
+        } finally {
+            AnnotationIndex.reset()
+        }
+    }
+
+    @Test
+    fun singleShortNameCollisionVerifiesQualifiedNameAndCachesResolution() {
+        val resolutions = AtomicInteger()
+        val declaration = symbol<KSDeclaration> { method ->
+            when (method) {
+                "getQualifiedName" -> name(Names.REQUEST_BODY)
+                else -> error(method)
+            }
+        }
+        val resolvedType = symbol<KSType> { method ->
+            when (method) {
+                "getDeclaration" -> declaration
+                else -> error(method)
+            }
+        }
+        val typeReference = symbol<KSTypeReference> { method ->
+            when (method) {
+                "resolve" -> {
+                    resolutions.incrementAndGet()
+                    resolvedType
+                }
+                else -> error(method)
+            }
+        }
+        val springRequestBody = symbol<KSAnnotation> { method ->
+            when (method) {
+                "getShortName" -> name("RequestBody")
+                "getAnnotationType" -> typeReference
+                else -> error(method)
+            }
+        }
+        val host = symbol<KSAnnotated> { method ->
+            when (method) {
+                "getAnnotations" -> sequenceOf(springRequestBody)
+                else -> error(method)
+            }
+        }
+        AnnotationIndex.reset()
+        try {
+            assertNull(host.annotation(Names.SWAGGER_REQUEST_BODY))
+            assertSame(springRequestBody, host.annotation(Names.REQUEST_BODY))
+            assertNull(host.annotation(Names.SWAGGER_REQUEST_BODY))
+            assertEquals(1, resolutions.get())
+            assertEquals("org.springframework.stereotype.Controller", Names.CONTROLLER)
         } finally {
             AnnotationIndex.reset()
         }

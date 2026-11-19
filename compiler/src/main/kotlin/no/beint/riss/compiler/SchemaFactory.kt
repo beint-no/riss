@@ -9,6 +9,7 @@ import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
+import com.google.devtools.ksp.symbol.KSTypeReference
 import com.google.devtools.ksp.symbol.KSValueParameter
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Origin
@@ -65,18 +66,35 @@ internal class SchemaFactory(
             return untyped(resolved, location, usage, sources, swagger, qualified)
         }
         if (isCollection(resolved)) {
+            val arrayAnnotation = sources.firstNotNullOfOrNull { it.annotation(Names.SWAGGER_ARRAY_SCHEMA) }
+            val outerSwagger = sources.firstNotNullOfOrNull { it.annotation(Names.SWAGGER_SCHEMA) }
+                ?: arrayAnnotation?.annotation("arraySchema")
+                ?: swagger.takeIf { arrayAnnotation == null }
+            val itemSwagger = arrayAnnotation?.annotation("schema")
+            val itemRef = outerSwagger?.string("ref")
             val argument = resolved.arguments.firstOrNull()
             val itemType = argument?.takeUnless { it.variance == Variance.STAR }?.type
-            val items = itemType?.let {
-                schema(it.resolve(), location, it, bindings = bindings, swagger = swaggerSchema(it) ?: swagger)
-            } ?: Schema.unconstrained()
+            val items = when {
+                itemType != null -> {
+                    val resolvedItem = itemType.resolve()
+                    val directItemSwagger = swaggerSchema(itemType) ?: itemSwagger
+                    if (directItemSwagger == null && itemRef != null) {
+                        applyNullability(Schema.ref(normalizeRef(itemRef)), resolvedItem)
+                    } else {
+                        schema(resolvedItem, location, itemType, bindings = bindings, swagger = directItemSwagger)
+                    }
+                }
+                itemRef != null -> Schema.ref(normalizeRef(itemRef))
+                else -> Schema.unconstrained()
+            }
             return applyNullability(
-                applyConstraints(Schema.builder().type("array").items(items).build(), sources, swagger),
+                applyConstraints(Schema.builder().type("array").items(items).build(), sources, outerSwagger),
                 resolved,
             )
         }
         asMap(resolved)?.let { map ->
-            val value = map.value?.let { bindings.resolve(it) }
+            val valueRef = map.valueRef
+            val value = valueRef?.resolve()?.let { bindings.resolve(it) }
             val valueName = value?.declaration?.qualifiedName?.asString()
             val additional = when {
                 value == null || value.declaration is KSTypeParameter || valueName in ANY_TYPES || valueName in JSON_TREES ->
@@ -84,7 +102,7 @@ internal class SchemaFactory(
                 else ->
                     Schema.builder()
                         .type("object")
-                        .additionalProperties(schema(value, location, bindings = bindings))
+                        .additionalProperties(schema(value, location, valueRef, bindings = bindings))
                         .build()
             }
             return applyNullability(applyConstraints(additional, sources, swagger), resolved)
@@ -100,9 +118,12 @@ internal class SchemaFactory(
         if (Modifier.VALUE in classDeclaration.modifiers || Modifier.INLINE in classDeclaration.modifiers) {
             val underlying = classDeclaration.primaryConstructor?.parameters?.singleOrNull()?.type?.resolve()
             if (underlying != null) {
-                return schema(
-                    underlying, location, classDeclaration, *sources.toTypedArray(), usage = usage, bindings = bindings,
-                    swagger = swaggerSchema(classDeclaration) ?: swagger,
+                return applyNullability(
+                    schema(
+                        underlying, location, classDeclaration, *sources.toTypedArray(), usage = usage, bindings = bindings,
+                        swagger = swaggerSchema(classDeclaration) ?: swagger,
+                    ),
+                    resolved,
                 )
             }
         }
@@ -115,7 +136,10 @@ internal class SchemaFactory(
             return applyNullability(enumSchema(classDeclaration, location, swagger), resolved)
         }
         if (Modifier.SEALED in classDeclaration.modifiers) {
-            return applyNullability(sealedSchema(classDeclaration, location, resolved, bindings), resolved)
+            return applyRefMetadata(
+                applyNullability(sealedSchema(classDeclaration, location, resolved, bindings), resolved),
+                swagger,
+            )
         }
         val implementation = swagger?.type("implementation")
         val implementationName = implementation?.declaration?.qualifiedName?.asString()
@@ -129,13 +153,13 @@ internal class SchemaFactory(
         val nextBindings = bindings.enter(classDeclaration, resolved)
         val name = componentName(classDeclaration, resolved, nextBindings)
         if (name in inProgress || name in components) {
-            return applyNullability(Schema.ref(componentRef(name)), resolved)
+            return applyRefMetadata(applyNullability(Schema.ref(componentRef(name)), resolved), swagger)
         }
         inProgress += name
         val built = objectSchema(classDeclaration, location, nextBindings)
         components.putIfAbsent(name, built)
         inProgress -= name
-        return applyNullability(Schema.ref(componentRef(name)), resolved)
+        return applyRefMetadata(applyNullability(Schema.ref(componentRef(name)), resolved), swagger)
     }
 
     fun unwrap(type: KSType, bindings: Bindings = Bindings.EMPTY): KSType {
@@ -268,8 +292,7 @@ internal class SchemaFactory(
         val builder = Schema.builder()
             .type(primitiveKind(jsonValue?.declaration?.qualifiedName?.asString()) ?: "string")
             .enumValues(values)
-        swagger?.string("description")?.let(builder::description)
-        swaggerSchema(declaration)?.string("description")?.let(builder::description)
+        (swagger?.string("description") ?: swaggerSchema(declaration)?.string("description"))?.let(builder::description)
         return builder.build()
     }
 
@@ -329,7 +352,13 @@ internal class SchemaFactory(
     /** Bean validation rejects null for this property, so the schema must not offer it. */
     private fun Schema.nonNull(): Schema = when {
         anyOf().size == 2 && anyOf().any { it.types() == listOf("null") } ->
-            anyOf().first { it.types() != listOf("null") }.let { other -> description()?.let { other.toBuilder().description(it).build() } ?: other }
+            anyOf().first { it.types() != listOf("null") }.let { other ->
+                val builder = other.toBuilder()
+                description()?.let(builder::description)
+                defaultValue()?.let(builder::defaultValue)
+                example()?.let(builder::example)
+                builder.build()
+            }
         "null" in types() && types().size > 1 -> toBuilder().types(types().filter { it != "null" }).build()
         else -> this
     }
@@ -362,12 +391,25 @@ internal class SchemaFactory(
             annotated.annotation(Names.SWAGGER_SCHEMA)?.bool("hidden") == true
 
     private fun ignoredName(name: String): Boolean =
-        name == "Companion" || name.startsWith("component")
+        name == "Companion" || COMPONENT_PROPERTY.matches(name)
 
     private fun has(annotated: KSAnnotated, name: String): Boolean = annotated.annotation(name) != null
 
     private fun applyNullability(schema: Schema, type: KSType): Schema =
         if (type.nullability == Nullability.NULLABLE) schema.nullable() else schema
+
+    private fun applyRefMetadata(schema: Schema, swagger: KSAnnotation?): Schema {
+        swagger ?: return schema
+        val description = swagger.string("description")
+        val defaultValue = swagger.string("defaultValue")
+        val example = swagger.string("example")
+        if (description == null && defaultValue == null && example == null) return schema
+        val builder = schema.toBuilder()
+        description?.let(builder::description)
+        defaultValue?.let(builder::defaultValue)
+        example?.let(builder::example)
+        return builder.build()
+    }
 
     private fun applyConstraints(
         schema: Schema,
@@ -377,23 +419,60 @@ internal class SchemaFactory(
         val next = applySwagger(schema, swagger)
         if (sources.isEmpty()) return next
         val builder = next.toBuilder()
+        val types = next.types()
+        var minLength = next.minLength()
+        var minItems = next.minItems()
+        var minProperties = next.minProperties()
         sources.firstNotNullOfOrNull { it.annotation(Names.SIZE) }?.let { size ->
             val min = size.int("min")?.takeIf { it > 0 }
             val max = size.int("max")?.takeIf { it < Int.MAX_VALUE }
-            if ("string" in next.types()) builder.minLength(min).maxLength(max)
-            if ("array" in next.types()) builder.minItems(min).maxItems(max)
+            if ("string" in types) {
+                min?.let { minLength = maxOf(minLength ?: 0, it) }
+                max?.let(builder::maxLength)
+            }
+            if ("array" in types) {
+                min?.let { minItems = maxOf(minItems ?: 0, it) }
+                max?.let(builder::maxItems)
+            }
+            if ("object" in types) {
+                min?.let { minProperties = maxOf(minProperties ?: 0, it) }
+                max?.let(builder::maxProperties)
+            }
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.MIN)?.int("value") }?.let {
-            builder.minimum(it.toBigDecimal())
+        if (sources.any { has(it, Names.NOT_BLANK) } && "string" in types) {
+            minLength = maxOf(minLength ?: 0, 1)
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.MAX)?.int("value") }?.let {
-            builder.maximum(it.toBigDecimal())
+        if (sources.any { has(it, Names.NOT_EMPTY) }) {
+            if ("string" in types) minLength = maxOf(minLength ?: 0, 1)
+            if ("array" in types) minItems = maxOf(minItems ?: 0, 1)
+            if ("object" in types) minProperties = maxOf(minProperties ?: 0, 1)
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MIN)?.string("value") }?.let {
-            builder.minimum(BigDecimal(it))
+        minLength?.let(builder::minLength)
+        minItems?.let(builder::minItems)
+        minProperties?.let(builder::minProperties)
+        sources.firstNotNullOfOrNull { it.annotation(Names.MIN)?.long("value") }?.let {
+            builder.minimum(BigDecimal.valueOf(it))
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MAX)?.string("value") }?.let {
-            builder.maximum(BigDecimal(it))
+        sources.firstNotNullOfOrNull { it.annotation(Names.MAX)?.long("value") }?.let {
+            builder.maximum(BigDecimal.valueOf(it))
+        }
+        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MIN) }?.let { annotation ->
+            annotation.string("value")?.let { value ->
+                if (annotation.bool("inclusive") == false) {
+                    builder.exclusiveMinimum(BigDecimal(value))
+                } else {
+                    builder.minimum(BigDecimal(value))
+                }
+            }
+        }
+        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MAX) }?.let { annotation ->
+            annotation.string("value")?.let { value ->
+                if (annotation.bool("inclusive") == false) {
+                    builder.exclusiveMaximum(BigDecimal(value))
+                } else {
+                    builder.maximum(BigDecimal(value))
+                }
+            }
         }
         sources.firstNotNullOfOrNull { it.annotation(Names.PATTERN)?.string("regexp") }?.let {
             builder.pattern(it)
@@ -402,8 +481,11 @@ internal class SchemaFactory(
             builder.format("email")
         }
         if (sources.any { has(it, Names.POSITIVE) }) {
-            val integer = next.types().contains("integer")
-            builder.minimum(if (integer) BigDecimal.ONE else BigDecimal("0.01"))
+            if ("integer" in types) {
+                builder.minimum(BigDecimal.ONE)
+            } else {
+                builder.exclusiveMinimum(BigDecimal.ZERO)
+            }
         }
         if (sources.any { has(it, Names.POSITIVE_OR_ZERO) }) {
             builder.minimum(BigDecimal.ZERO)
@@ -537,7 +619,8 @@ internal class SchemaFactory(
                 type.declaration,
             )
         }
-        return MapArgs(value = typeArgument(type, 1))
+        val valueRef = type.arguments.getOrNull(1)?.takeUnless { it.variance == Variance.STAR }?.type
+        return MapArgs(valueRef = valueRef)
     }
 
     private fun classifierIn(type: KSType, names: Set<String>): Boolean {
@@ -716,9 +799,10 @@ internal class SchemaFactory(
         val annotated: List<KSAnnotated>,
     )
 
-    private data class MapArgs(val value: KSType?)
+    private data class MapArgs(val valueRef: KSTypeReference?)
 
     private companion object {
+        val COMPONENT_PROPERTY = Regex("component\\d+")
         val IGNORE_IMPLEMENTATIONS = setOf(
             "java.lang.Void",
             "void",

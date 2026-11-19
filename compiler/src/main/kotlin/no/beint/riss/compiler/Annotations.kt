@@ -8,8 +8,9 @@ import com.google.devtools.ksp.symbol.KSType
 
 internal object Names {
     const val REST_CONTROLLER = "org.springframework.web.bind.annotation.RestController"
-    const val CONTROLLER = "org.springframework.web.bind.annotation.Controller"
+    const val CONTROLLER = "org.springframework.stereotype.Controller"
     const val RESPONSE_BODY = "org.springframework.web.bind.annotation.ResponseBody"
+    const val RESPONSE_STATUS = "org.springframework.web.bind.annotation.ResponseStatus"
     const val REQUEST_MAPPING = "org.springframework.web.bind.annotation.RequestMapping"
     const val GET_MAPPING = "org.springframework.web.bind.annotation.GetMapping"
     const val POST_MAPPING = "org.springframework.web.bind.annotation.PostMapping"
@@ -91,9 +92,13 @@ internal object AnnotationIndex {
     private val cache = ThreadLocal.withInitial {
         java.util.IdentityHashMap<KSAnnotated, Map<String, List<KSAnnotation>>>()
     }
+    private val resolvedNames = ThreadLocal.withInitial {
+        java.util.IdentityHashMap<KSAnnotation, String>()
+    }
 
     fun reset() {
         cache.remove()
+        resolvedNames.remove()
     }
 
     fun find(host: KSAnnotated, qualifiedName: String): KSAnnotation? = matching(host, qualifiedName).firstOrNull()
@@ -103,15 +108,18 @@ internal object AnnotationIndex {
         return matching(host, qualifiedName) + nested
     }
 
+    fun qualifiedName(annotation: KSAnnotation): String? =
+        resolvedNames.get().getOrPut(annotation) {
+            annotation.annotationType.resolve().declaration.qualifiedName?.asString().orEmpty()
+        }.ifEmpty { null }
+
     private fun matching(host: KSAnnotated, qualifiedName: String): List<KSAnnotation> {
         val shortName = qualifiedName.substringAfterLast('.')
         val candidates = index(host)[shortName].orEmpty()
-        if (candidates.size <= 1) {
-            return candidates
+        if (candidates.isEmpty()) {
+            return emptyList()
         }
-        return candidates.filter { annotation ->
-            annotation.annotationType.resolve().declaration.qualifiedName?.asString() == qualifiedName
-        }
+        return candidates.filter { annotation -> qualifiedName(annotation) == qualifiedName }
     }
 
     private fun index(host: KSAnnotated): Map<String, List<KSAnnotation>> =
@@ -120,7 +128,7 @@ internal object AnnotationIndex {
 
 internal fun KSAnnotation.matches(qualifiedName: String): Boolean =
     shortName.asString() == qualifiedName.substringAfterLast('.') &&
-        annotationType.resolve().declaration.qualifiedName?.asString() == qualifiedName
+        AnnotationIndex.qualifiedName(this) == qualifiedName
 
 internal fun KSAnnotated.annotation(qualifiedName: String): KSAnnotation? = AnnotationIndex.find(this, qualifiedName)
 
@@ -140,6 +148,8 @@ internal fun KSAnnotation.strings(name: String): List<String> =
 internal fun KSAnnotation.bool(name: String): Boolean? = argument(name) as? Boolean
 
 internal fun KSAnnotation.int(name: String): Int? = (argument(name) as? Number)?.toInt()
+
+internal fun KSAnnotation.long(name: String): Long? = (argument(name) as? Number)?.toLong()
 
 internal fun KSAnnotation.double(name: String): Double? = (argument(name) as? Number)?.toDouble()
 

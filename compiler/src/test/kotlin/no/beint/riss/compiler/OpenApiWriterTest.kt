@@ -95,6 +95,44 @@ class OpenApiWriterTest {
     }
 
     @Test
+    fun writesRefMetadataAndExclusiveBoundsAndPropertyLimits() {
+        val refWithMeta = Schema.ref("#/components/schemas/Item").toBuilder()
+            .description("Primary item")
+            .defaultValue("{}")
+            .example("{\"id\":1}")
+            .build()
+        val nullableRefWithMeta = refWithMeta.nullable()
+        val boundedNumber = Schema.builder()
+            .type("number")
+            .exclusiveMinimum(BigDecimal.ZERO)
+            .exclusiveMaximum(BigDecimal("100.5"))
+            .build()
+        val boundedMap = Schema.builder()
+            .type("object")
+            .additionalProperties(Schema.builder().type("string").build())
+            .minProperties(1)
+            .maxProperties(5)
+            .build()
+        val document = OpenApi.builder(Info("Meta", "1", null, null))
+            .schema("Item", Schema.builder().type("object").build())
+            .schema("RefWithMeta", refWithMeta)
+            .schema("NullableRefWithMeta", nullableRefWithMeta)
+            .schema("BoundedNumber", boundedNumber)
+            .schema("BoundedMap", boundedMap)
+            .path(
+                "/n",
+                PathItem(mapOf("get" to Operation.builder("n").response("204", Response.of("No content")).build())),
+            )
+            .build()
+
+        val json = OpenApiWriter.writeString(document)
+        assertTrue(json.contains("\"RefWithMeta\":{\"${'$'}ref\":\"#/components/schemas/Item\",\"default\":\"{}\",\"description\":\"Primary item\",\"example\":\"{\\\"id\\\":1}\"}"))
+        assertTrue(json.contains("\"NullableRefWithMeta\":{\"anyOf\":[{\"${'$'}ref\":\"#/components/schemas/Item\"},{\"type\":\"null\"}],\"default\":\"{}\",\"description\":\"Primary item\",\"example\":\"{\\\"id\\\":1}\"}"))
+        assertTrue(json.contains("\"BoundedNumber\":{\"exclusiveMaximum\":100.5,\"exclusiveMinimum\":0,\"type\":\"number\"}"))
+        assertTrue(json.contains("\"BoundedMap\":{\"additionalProperties\":{\"type\":\"string\"},\"maxProperties\":5,\"minProperties\":1,\"type\":\"object\"}"))
+    }
+
+    @Test
     fun byteAndStringOutputAreIdenticalUtf8() {
         val document = OpenApi.builder(Info("Blåbær 😀", "1", null, null))
             .path(

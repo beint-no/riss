@@ -109,7 +109,12 @@ internal object OpenApiWriter {
 
     private fun schema(schema: Schema): Map<String, Any> {
         if (schema.ref() != null && schema.anyOf().isEmpty() && schema.oneOf().isEmpty()) {
-            return obj("\$ref" to schema.ref(), "description" to schema.description(), "default" to schema.defaultValue())
+            return obj(
+                "\$ref" to schema.ref(),
+                "description" to schema.description(),
+                "default" to schema.defaultValue(),
+                "example" to schema.example(),
+            )
         }
         val types = schema.types()
         return obj(
@@ -124,10 +129,14 @@ internal object OpenApiWriter {
             "minLength" to schema.minLength(),
             "maxLength" to schema.maxLength(),
             "minimum" to schema.minimum(),
+            "exclusiveMinimum" to schema.exclusiveMinimum(),
             "maximum" to schema.maximum(),
+            "exclusiveMaximum" to schema.exclusiveMaximum(),
             "multipleOf" to schema.multipleOf(),
             "minItems" to schema.minItems(),
             "maxItems" to schema.maxItems(),
+            "minProperties" to schema.minProperties(),
+            "maxProperties" to schema.maxProperties(),
             "enum" to schema.enumValues().ifEmpty { null }?.let { values -> if ("null" in types) values + null else values },
             "default" to literal(schema.defaultValue(), types),
             "example" to literal(schema.example(), types),
