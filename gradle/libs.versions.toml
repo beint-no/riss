@@ -1,8 +1,8 @@
 # Single source for dependency versions. RissPlugin.SWAGGER_ANNOTATIONS repeats the swagger
 # version in Java because the plugin cannot read this catalog at consumer build time.
 [versions]
-kotlin = "2.5.0-Beta2"
-ksp = "2.3.13"
+kotlin = "2.5.0-RC"
+ksp = "2.3.14"
 spring = "7.0.10"
 spring-boot = "4.2.0-RC2"
 servlet = "6.1.0"
