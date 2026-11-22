@@ -42,7 +42,7 @@ public class RissController {
         this.properties = properties;
         var encoded = new LinkedHashMap<String, RissSpecResponse.Encoded>();
         for (var spec : this.specs) {
-            encoded.put(spec.name(), RissSpecResponse.Encoded.of(spec.json()));
+            encoded.put(spec.name(), RissSpecResponse.Encoded.of(spec));
         }
         this.documents = Map.copyOf(encoded);
     }

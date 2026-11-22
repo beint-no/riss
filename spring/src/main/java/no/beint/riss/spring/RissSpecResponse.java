@@ -1,5 +1,6 @@
 package no.beint.riss.spring;
 
+import no.beint.riss.SpecSet;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -21,11 +22,15 @@ final class RissSpecResponse {
     private RissSpecResponse() {
     }
 
-    /** A compiled document with its gzip representation, both encoded once at startup. */
+    /** The representations held by the controller for the lifetime of the application. */
     record Encoded(byte[] raw, String etag, byte[] gzip, String gzipEtag) {
-        static Encoded of(byte[] raw) {
-            var etag = RissSpecResponse.etag(raw);
-            return new Encoded(raw, etag, RissSpecResponse.gzip(raw), etag.substring(0, etag.length() - 1) + "-gzip\"");
+        static Encoded of(SpecSet spec) {
+            var raw = spec.json();
+            var gzip = spec.gzipJson();
+            if (gzip == null) {
+                gzip = RissSpecResponse.gzip(raw);
+            }
+            return new Encoded(raw, RissSpecResponse.etag(raw), gzip, RissSpecResponse.etag(gzip));
         }
     }
 

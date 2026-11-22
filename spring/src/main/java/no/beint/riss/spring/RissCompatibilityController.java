@@ -27,7 +27,7 @@ public class RissCompatibilityController {
     }
 
     RissCompatibilityController(List<SpecSet> specs, RissProperties properties) {
-        this(specs, properties, spec -> RissSpecResponse.Encoded.of(spec.json()));
+        this(specs, properties, RissSpecResponse.Encoded::of);
     }
 
     /** Reuses the documents the canonical controller already loaded and encoded at startup. */

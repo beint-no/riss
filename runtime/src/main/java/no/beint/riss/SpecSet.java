@@ -7,4 +7,9 @@ public interface SpecSet {
     String name();
 
     byte[] json();
+
+    /** Returns an optional gzip encoding of {@link #json()}, or null when unavailable. */
+    default byte[] gzipJson() {
+        return null;
+    }
 }

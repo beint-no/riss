@@ -5,6 +5,7 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.symbol.KSFile
 import no.beint.riss.model.OpenApi
 import java.nio.charset.StandardCharsets
+import java.util.zip.GZIPOutputStream
 
 internal class SpecEmitter(
     private val codeGenerator: CodeGenerator,
@@ -23,6 +24,14 @@ internal class SpecEmitter(
         codeGenerator.createNewFile(
             dependencies = dependencies,
             packageName = generatedPackage,
+            fileName = "$registryName.json",
+            extensionName = "gz",
+        ).use { resource ->
+            GZIPOutputStream(resource).use { it.write(json) }
+        }
+        codeGenerator.createNewFile(
+            dependencies = dependencies,
+            packageName = generatedPackage,
             fileName = registryName,
             extensionName = "java",
         ).bufferedWriter(StandardCharsets.UTF_8).use { output ->
@@ -34,7 +43,7 @@ internal class SpecEmitter(
             output.appendLine("import no.beint.riss.SpecSet;")
             output.appendLine()
             output.appendLine("public final class $registryName implements SpecSet {")
-            output.appendLine("    private static final byte[] JSON = load();")
+            output.appendLine("    private static final byte[] JSON = load(\"$registryName.json\", true);")
             output.appendLine()
             output.appendLine("    @Override")
             output.appendLine("    public String name() {")
@@ -46,10 +55,16 @@ internal class SpecEmitter(
             output.appendLine("        return JSON;")
             output.appendLine("    }")
             output.appendLine()
-            output.appendLine("    private static byte[] load() {")
-            output.appendLine("        try (InputStream in = $registryName.class.getResourceAsStream(\"$registryName.json\")) {")
+            // Leave off @Override so generated sources can also compile against older runtimes.
+            output.appendLine("    public byte[] gzipJson() {")
+            output.appendLine("        return load(\"$registryName.json.gz\", false);")
+            output.appendLine("    }")
+            output.appendLine()
+            output.appendLine("    private static byte[] load(String resource, boolean required) {")
+            output.appendLine("        try (InputStream in = $registryName.class.getResourceAsStream(resource)) {")
             output.appendLine("            if (in == null) {")
-            output.appendLine("                throw new IllegalStateException(\"Missing $registryName.json\");")
+            output.appendLine("                if (required) throw new IllegalStateException(\"Missing \" + resource);")
+            output.appendLine("                return null;")
             output.appendLine("            }")
             output.appendLine("            return in.readAllBytes();")
             output.appendLine("        } catch (IOException exception) {")
