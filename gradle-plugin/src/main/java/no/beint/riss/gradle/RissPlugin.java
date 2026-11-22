@@ -21,6 +21,8 @@ public final class RissPlugin implements Plugin<Project> {
         extension.getGeneratedPackage().convention(generatedPackage(project));
         project.afterEvaluate(evaluated -> extension.getGeneratedPackage().convention(generatedPackage(evaluated)));
         extension.getRegistryName().convention("RissSpec");
+        extension.getValidatorRegistryName().convention("RissValidators");
+        extension.getValidation().convention(true);
         extension.getSpecName().convention("api");
         extension.getScanPackages().convention(java.util.List.of());
         extension.getPaths().convention(java.util.List.of());
@@ -54,6 +56,9 @@ public final class RissPlugin implements Plugin<Project> {
         var ksp = project.getExtensions().getByType(KspExtension.class);
         ksp.arg("riss.package", extension.getGeneratedPackage());
         ksp.arg("riss.registry", extension.getRegistryName());
+        ksp.arg("riss.validatorRegistry", extension.getValidatorRegistryName());
+        ksp.arg("riss.openApi", "true");
+        ksp.arg("riss.validation", extension.getValidation().map(String::valueOf));
         ksp.arg("riss.specName", extension.getSpecName());
         ksp.arg("riss.scanPackages", extension.getScanPackages().map(values -> String.join(",", values)));
         ksp.arg("riss.paths", extension.getPaths().map(values -> String.join(",", values)));
@@ -106,12 +111,12 @@ public final class RissPlugin implements Plugin<Project> {
                 .collect(java.util.stream.Collectors.joining(","));
     }
 
-    private String implementationVersion(Project project) {
+    static String implementationVersion(Project project) {
         var version = RissPlugin.class.getPackage().getImplementationVersion();
         return version == null ? project.getVersion().toString() : version;
     }
 
-    private String generatedPackage(Project project) {
+    static String generatedPackage(Project project) {
         var group = project.getGroup().toString();
         var prefix = group.matches("[A-Za-z_][A-Za-z0-9_]*(?:\\.[A-Za-z_][A-Za-z0-9_]*)*") ? group + "." : "";
         var projectPath = project.getPath().replaceFirst("^:", "").replace(':', '.');
@@ -128,7 +133,7 @@ public final class RissPlugin implements Plugin<Project> {
         return packageName.append(".riss.generated").toString();
     }
 
-    private String javaIdentifier(String value) {
+    private static String javaIdentifier(String value) {
         var output = new StringBuilder(value.length());
         value.toLowerCase(Locale.ROOT).codePoints().forEach(character -> {
             if (Character.isJavaIdentifierPart(character)) {

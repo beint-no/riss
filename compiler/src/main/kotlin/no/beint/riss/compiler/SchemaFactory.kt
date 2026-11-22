@@ -347,7 +347,9 @@ internal class SchemaFactory(
     }
 
     private fun validatedNonNull(source: KSAnnotated): Boolean =
-        has(source, Names.NOT_NULL) || has(source, Names.NOT_BLANK) || has(source, Names.NOT_EMPTY)
+        source.hasAny(Names.NOT_NULL_ANNOTATIONS) ||
+            source.hasAny(Names.NOT_BLANK_ANNOTATIONS) ||
+            source.hasAny(Names.NOT_EMPTY_ANNOTATIONS)
 
     /** Bean validation rejects null for this property, so the schema must not offer it. */
     private fun Schema.nonNull(): Schema = when {
@@ -423,7 +425,7 @@ internal class SchemaFactory(
         var minLength = next.minLength()
         var minItems = next.minItems()
         var minProperties = next.minProperties()
-        sources.firstNotNullOfOrNull { it.annotation(Names.SIZE) }?.let { size ->
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.SIZE_ANNOTATIONS) }?.let { size ->
             val min = size.int("min")?.takeIf { it > 0 }
             val max = size.int("max")?.takeIf { it < Int.MAX_VALUE }
             if ("string" in types) {
@@ -439,10 +441,10 @@ internal class SchemaFactory(
                 max?.let(builder::maxProperties)
             }
         }
-        if (sources.any { has(it, Names.NOT_BLANK) } && "string" in types) {
+        if (sources.any { it.hasAny(Names.NOT_BLANK_ANNOTATIONS) } && "string" in types) {
             minLength = maxOf(minLength ?: 0, 1)
         }
-        if (sources.any { has(it, Names.NOT_EMPTY) }) {
+        if (sources.any { it.hasAny(Names.NOT_EMPTY_ANNOTATIONS) }) {
             if ("string" in types) minLength = maxOf(minLength ?: 0, 1)
             if ("array" in types) minItems = maxOf(minItems ?: 0, 1)
             if ("object" in types) minProperties = maxOf(minProperties ?: 0, 1)
@@ -450,13 +452,13 @@ internal class SchemaFactory(
         minLength?.let(builder::minLength)
         minItems?.let(builder::minItems)
         minProperties?.let(builder::minProperties)
-        sources.firstNotNullOfOrNull { it.annotation(Names.MIN)?.long("value") }?.let {
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.MIN_ANNOTATIONS)?.long("value") }?.let {
             builder.minimum(BigDecimal.valueOf(it))
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.MAX)?.long("value") }?.let {
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.MAX_ANNOTATIONS)?.long("value") }?.let {
             builder.maximum(BigDecimal.valueOf(it))
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MIN) }?.let { annotation ->
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.DECIMAL_MIN_ANNOTATIONS) }?.let { annotation ->
             annotation.string("value")?.let { value ->
                 if (annotation.bool("inclusive") == false) {
                     builder.exclusiveMinimum(BigDecimal(value))
@@ -465,7 +467,7 @@ internal class SchemaFactory(
                 }
             }
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.DECIMAL_MAX) }?.let { annotation ->
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.DECIMAL_MAX_ANNOTATIONS) }?.let { annotation ->
             annotation.string("value")?.let { value ->
                 if (annotation.bool("inclusive") == false) {
                     builder.exclusiveMaximum(BigDecimal(value))
@@ -474,21 +476,31 @@ internal class SchemaFactory(
                 }
             }
         }
-        sources.firstNotNullOfOrNull { it.annotation(Names.PATTERN)?.string("regexp") }?.let {
+        sources.firstNotNullOfOrNull { it.annotationAny(Names.PATTERN_ANNOTATIONS)?.string("regexp") }?.let {
             builder.pattern(it)
         }
-        if (sources.any { has(it, Names.EMAIL) }) {
+        if (sources.any { it.hasAny(Names.EMAIL_ANNOTATIONS) }) {
             builder.format("email")
         }
-        if (sources.any { has(it, Names.POSITIVE) }) {
+        if (sources.any { it.hasAny(Names.POSITIVE_ANNOTATIONS) }) {
             if ("integer" in types) {
                 builder.minimum(BigDecimal.ONE)
             } else {
                 builder.exclusiveMinimum(BigDecimal.ZERO)
             }
         }
-        if (sources.any { has(it, Names.POSITIVE_OR_ZERO) }) {
+        if (sources.any { it.hasAny(Names.POSITIVE_OR_ZERO_ANNOTATIONS) }) {
             builder.minimum(BigDecimal.ZERO)
+        }
+        if (sources.any { it.hasAny(Names.NEGATIVE_ANNOTATIONS) }) {
+            if ("integer" in types) {
+                builder.maximum(BigDecimal.valueOf(-1))
+            } else {
+                builder.exclusiveMaximum(BigDecimal.ZERO)
+            }
+        }
+        if (sources.any { it.hasAny(Names.NEGATIVE_OR_ZERO_ANNOTATIONS) }) {
+            builder.maximum(BigDecimal.ZERO)
         }
         return builder.build()
     }

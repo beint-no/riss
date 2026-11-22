@@ -14,6 +14,10 @@ public abstract class RissExtension {
 
     public abstract Property<String> getRegistryName();
 
+    public abstract Property<String> getValidatorRegistryName();
+
+    public abstract Property<Boolean> getValidation();
+
     public abstract Property<String> getSpecName();
 
     public abstract ListProperty<String> getScanPackages();

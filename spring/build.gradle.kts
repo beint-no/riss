@@ -7,6 +7,7 @@ dependencies {
     api(project(":runtime"))
     api(libs.spring.webmvc)
     compileOnly(libs.spring.boot.autoconfigure)
+    compileOnly(libs.spring.boot.webmvc)
     compileOnly(libs.servlet.api)
 
     testImplementation(platform(libs.junit.bom))
