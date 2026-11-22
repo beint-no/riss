@@ -50,6 +50,15 @@ public abstract class RissExtension {
     /** Schema name prefix that every operation taking {@code page} must return, together with {@code pageSize}. */
     public abstract Property<String> getLintPageSchemaPrefix();
 
+    /** Require every integer {@code id} / {@code *Id} path and query parameter to declare {@code @Positive} or {@code @Min(1)}. */
+    public abstract Property<Boolean> getLintPositiveIds();
+
+    /** Require static path segments to be lowercase kebab-case and path variables to be camelCase. */
+    public abstract Property<Boolean> getLintKebabPaths();
+
+    /** Require every operation to declare a non-blank summary. */
+    public abstract Property<Boolean> getLintRequireSummary();
+
     /** Accepted violations, one key per line. Keys that no longer violate a rule fail the build. */
     public abstract RegularFileProperty getLintBaseline();
 }

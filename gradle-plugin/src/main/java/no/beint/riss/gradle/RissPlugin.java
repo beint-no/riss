@@ -36,6 +36,9 @@ public final class RissPlugin implements Plugin<Project> {
         extension.getLintEnumPattern().convention("");
         extension.getLintFormatBySuffix().convention(java.util.Map.of());
         extension.getLintPageSchemaPrefix().convention("");
+        extension.getLintPositiveIds().convention(false);
+        extension.getLintKebabPaths().convention(false);
+        extension.getLintRequireSummary().convention(false);
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlin(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -73,6 +76,9 @@ public final class RissPlugin implements Plugin<Project> {
         ksp.arg("riss.lint.enumPattern", extension.getLintEnumPattern());
         ksp.arg("riss.lint.formatBySuffix", extension.getLintFormatBySuffix().map(RissPlugin::pairs));
         ksp.arg("riss.lint.pageSchemaPrefix", extension.getLintPageSchemaPrefix());
+        ksp.arg("riss.lint.positiveIds", extension.getLintPositiveIds().map(String::valueOf));
+        ksp.arg("riss.lint.kebabPaths", extension.getLintKebabPaths().map(String::valueOf));
+        ksp.arg("riss.lint.requireSummary", extension.getLintRequireSummary().map(String::valueOf));
         ksp.arg("riss.lint.baseline", extension.getLintBaseline().map(file -> file.getAsFile().getAbsolutePath()).orElse(""));
         ksp.arg("riss.lint.report", project.getLayout().getBuildDirectory().file("riss/lint-violations.txt")
                 .map(file -> file.getAsFile().getAbsolutePath()));

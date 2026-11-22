@@ -24,6 +24,7 @@ import java.util.regex.PatternSyntaxException
 internal data class ValidationModel(
     val types: List<ValidatedType>,
     val methods: List<ValidatedMethod>,
+    val requiredExternalTypes: List<String>,
     val files: List<KSFile>,
 )
 
@@ -103,19 +104,25 @@ internal sealed interface Constraint {
 internal class ValidationCompiler(
     private val diagnostics: Diagnostics,
 ) {
+    private val constraintCache = mutableMapOf<String, Boolean>()
+
     fun compile(resolver: Resolver): ValidationModel {
         val classes = linkedMapOf<String, KSClassDeclaration>()
         val files = linkedSetOf<KSFile>()
+        val requiredExternalTypes = linkedSetOf<String>()
+        val validatedInputClasses = linkedSetOf<KSClassDeclaration>()
 
         resolver.getAllFiles().forEach { file ->
             collectClasses(file.declarations.filterIsInstance<KSClassDeclaration>(), classes)
         }
 
         val validatedTypes = mutableListOf<ValidatedType>()
+        val validatedClassDecls = linkedSetOf<KSClassDeclaration>()
         classes.values.forEach { declaration ->
-            val model = inspectClass(declaration)
+            val model = inspectClass(declaration, requiredExternalTypes)
             if (model != null) {
                 validatedTypes += model
+                validatedClassDecls += declaration
                 declaration.containingFile?.let(files::add)
             }
         }
@@ -127,13 +134,38 @@ internal class ValidationCompiler(
             .distinct()
             .toList()
 
+        val checkedControllers = mutableSetOf<String>()
+        controllerFunctions.forEach { function ->
+            val controller = function.parentDeclaration as? KSClassDeclaration ?: return@forEach
+            val controllerName = controller.qualifiedName?.asString() ?: return@forEach
+            if (checkedControllers.add(controllerName)) {
+                checkObsoleteValidated(controller, controllerName)
+            }
+            checkObsoleteValidated(function, "$controllerName.${function.simpleName.asString()}")
+        }
+
         val validatedMethods = mutableListOf<ValidatedMethod>()
         controllerFunctions.forEach { function ->
-            val model = inspectControllerMethod(function)
+            val externalBefore = requiredExternalTypes.size
+            val model = inspectControllerMethod(function, requiredExternalTypes, validatedInputClasses)
             if (model != null) {
                 validatedMethods += model
                 function.containingFile?.let(files::add)
+            } else if (requiredExternalTypes.size != externalBefore) {
+                function.containingFile?.let(files::add)
             }
+        }
+
+        val nestedChecked = mutableSetOf<String>()
+        val queue = ArrayDeque<KSClassDeclaration>()
+        validatedClassDecls.forEach(queue::add)
+        validatedInputClasses.forEach(queue::add)
+        while (queue.isNotEmpty()) {
+            val declaration = queue.removeFirst()
+            val qn = declaration.qualifiedName?.asString() ?: continue
+            if (!nestedChecked.add(qn)) continue
+            if (declaration.containingFile == null) continue
+            checkMissingNestedValid(declaration, queue, requiredExternalTypes)
         }
 
         return ValidationModel(
@@ -143,6 +175,7 @@ internal class ValidationCompiler(
                     .thenBy { it.methodName }
                     .thenBy { it.jvmParameterTypes.joinToString(",") },
             ),
+            requiredExternalTypes = requiredExternalTypes.sorted(),
             files = files.toList(),
         )
     }
@@ -172,7 +205,10 @@ internal class ValidationCompiler(
         return true
     }
 
-    private fun inspectClass(declaration: KSClassDeclaration): ValidatedType? {
+    private fun inspectClass(
+        declaration: KSClassDeclaration,
+        requiredExternalTypes: MutableSet<String>,
+    ): ValidatedType? {
         if (Modifier.VALUE in declaration.modifiers || Modifier.INLINE in declaration.modifiers) {
             return null
         }
@@ -199,6 +235,12 @@ internal class ValidationCompiler(
 
             val location = "$qualifiedName.$propName"
             val parsed = parseTarget(sources, type, location, property)
+            if (parsed.cascade) {
+                recordExternalIfConstrained(type, requiredExternalTypes)
+            }
+            if (parsed.elementTarget?.cascadeValue == true) {
+                recordExternalIfConstrained(parsed.elementTarget.valueType, requiredExternalTypes)
+            }
             if (parsed.constraints.isNotEmpty() || parsed.cascade || parsed.elementTarget != null) {
                 properties += ValidatedProperty(
                     name = propName,
@@ -263,7 +305,11 @@ internal class ValidationCompiler(
         )
     }
 
-    private fun inspectControllerMethod(function: KSFunctionDeclaration): ValidatedMethod? {
+    private fun inspectControllerMethod(
+        function: KSFunctionDeclaration,
+        requiredExternalTypes: MutableSet<String>,
+        validatedInputClasses: MutableSet<KSClassDeclaration>,
+    ): ValidatedMethod? {
         val controller = function.parentDeclaration as? KSClassDeclaration ?: return null
         if (!isAccessible(controller) || !isAccessible(function)) return null
         val controllerName = controller.qualifiedName?.asString() ?: return null
@@ -280,11 +326,18 @@ internal class ValidationCompiler(
             val isScalarBinding = param.annotation(Names.PATH_VARIABLE) != null ||
                 param.annotation(Names.REQUEST_PARAM) != null ||
                 param.annotation(Names.REQUEST_HEADER) != null
+            val isStructuredInput = param.annotation(Names.REQUEST_BODY) != null ||
+                param.annotation(Names.RISS_PARAMETER_OBJECT) != null ||
+                param.annotation(Names.SPRINGDOC_PARAMETER_OBJECT) != null ||
+                param.annotation(Names.REQUEST_PART) != null
             val hasDirectValid = param.hasAny(Names.VALID_ANNOTATIONS) || param.annotation(Names.VALIDATED) != null
+            val container = containerKind(type)
 
             // Spring MVC already validates @RequestBody, @ModelAttribute, @ParameterObject, @RequestPart,
             // and implicit command objects annotated with @Valid through RissSpringValidator (including BindingResult).
-            if (!isScalarBinding && hasDirectValid) {
+            if (!isScalarBinding && hasDirectValid && container == null) {
+                recordExternalIfConstrained(type, requiredExternalTypes)
+                (unwrapAlias(type).declaration as? KSClassDeclaration)?.takeIf { it.containingFile != null }?.let(validatedInputClasses::add)
                 return@forEachIndexed
             }
 
@@ -292,6 +345,40 @@ internal class ValidationCompiler(
             val fieldName = resolveParameterFieldName(param)
             val location = "$controllerName.$methodName($fieldName)"
             val parsed = parseTarget(sources, type, location, param)
+
+            if (parsed.cascade) {
+                recordExternalIfConstrained(type, requiredExternalTypes)
+                (unwrapAlias(type).declaration as? KSClassDeclaration)?.takeIf { it.containingFile != null }?.let(validatedInputClasses::add)
+            }
+            if (parsed.elementTarget?.cascadeValue == true) {
+                recordExternalIfConstrained(parsed.elementTarget.valueType, requiredExternalTypes)
+                (unwrapAlias(parsed.elementTarget.valueType).declaration as? KSClassDeclaration)?.takeIf { it.containingFile != null }?.let(validatedInputClasses::add)
+            }
+
+            if (isStructuredInput && !hasDirectValid) {
+                if (container != null) {
+                    val valueType = containerValueType(type, container)
+                    val valueDecl = valueType?.let { unwrapAlias(it).declaration as? KSClassDeclaration }
+                    if (valueDecl != null && hasConstraints(valueDecl) && parsed.elementTarget?.cascadeValue != true) {
+                        diagnostics.error(
+                            "RISS-VALIDATION",
+                            location,
+                            "Element type '${valueDecl.simpleName.asString()}' has validation constraints; add @Valid on the type argument (e.g. List<@Valid ${valueDecl.simpleName.asString()}>)",
+                            param,
+                        )
+                    }
+                } else {
+                    val decl = unwrapAlias(type).declaration as? KSClassDeclaration
+                    if (decl != null && hasConstraints(decl)) {
+                        diagnostics.error(
+                            "RISS-VALIDATION",
+                            location,
+                            "Parameter type '${decl.simpleName.asString()}' has validation constraints; add @Valid so Spring validates it",
+                            param,
+                        )
+                    }
+                }
+            }
 
             // For @RequestBody/@ModelAttribute/@RequestPart without @Valid, only validate direct constraints
             // or element-level @Valid/constraints (e.g. @RequestBody stages: List<@Valid StageDto>).
@@ -321,6 +408,160 @@ internal class ValidationCompiler(
             jvmParameterTypes = jvmParamTypes,
             parameters = validatedParams,
         )
+    }
+
+    private fun checkObsoleteValidated(symbol: KSAnnotated, location: String) {
+        val ann = symbol.annotation(Names.VALIDATED) ?: return
+        if (ann.types("value").isEmpty()) {
+            diagnostics.error(
+                "RISS-VALIDATION",
+                location,
+                "Remove @Validated: Riss validates controller parameters at compile time without Spring AOP proxies",
+                symbol,
+            )
+        }
+    }
+
+    private fun checkMissingNestedValid(
+        declaration: KSClassDeclaration,
+        queue: ArrayDeque<KSClassDeclaration>,
+        requiredExternalTypes: MutableSet<String>,
+    ) {
+        if (declaration.classKind != ClassKind.CLASS && declaration.classKind != ClassKind.INTERFACE) return
+        if (Modifier.VALUE in declaration.modifiers || Modifier.INLINE in declaration.modifiers) return
+        val qualifiedName = declaration.qualifiedName?.asString() ?: return
+        val ctorParams = declaration.primaryConstructor?.parameters
+            ?.associateBy { it.name?.asString().orEmpty() }
+            .orEmpty()
+
+        declaration.getDeclaredProperties().forEach { property ->
+            if (Modifier.PRIVATE in property.modifiers || Modifier.PROTECTED in property.modifiers) return@forEach
+            val propName = property.simpleName.asString()
+            val sources = buildList<KSAnnotated> {
+                add(property)
+                property.backingField?.let(::add)
+                property.getter?.let(::add)
+                ctorParams[propName]?.let(::add)
+                add(property.type)
+            }
+            if (sources.any { it.hasAny(Names.JSON_IGNORE_ANNOTATIONS) }) return@forEach
+            val type = property.type.resolve()
+            if (type.isError) return@forEach
+
+            val location = "$qualifiedName.$propName"
+            val container = containerKind(type)
+            if (container != null) {
+                val valueArg = when (container) {
+                    ContainerKind.ITERABLE, ContainerKind.ARRAY -> type.arguments.firstOrNull()
+                    ContainerKind.MAP -> type.arguments.getOrNull(1)
+                }
+                val valueType = valueArg?.type?.resolve() ?: return@forEach
+                if (valueType.isError) return@forEach
+                val valueDecl = unwrapAlias(valueType).declaration as? KSClassDeclaration ?: return@forEach
+                val hasArgValid = listOfNotNull(valueArg, valueArg.type).any { it.hasAny(Names.VALID_ANNOTATIONS) } ||
+                    valueType.annotations.any { ann -> Names.VALID_ANNOTATIONS.any { ann.matches(it) } }
+                if (hasArgValid) {
+                    recordExternalIfConstrained(valueType, requiredExternalTypes)
+                    if (valueDecl.containingFile != null) queue.add(valueDecl)
+                } else if (hasConstraints(valueDecl)) {
+                    diagnostics.error(
+                        "RISS-VALIDATION",
+                        location,
+                        "Element type '${valueDecl.simpleName.asString()}' has validation constraints; add @Valid on the type argument (e.g. List<@Valid ${valueDecl.simpleName.asString()}>)",
+                        property,
+                    )
+                }
+            } else {
+                val propDecl = unwrapAlias(type).declaration as? KSClassDeclaration ?: return@forEach
+                val hasDirectValid = sources.any { it.hasAny(Names.VALID_ANNOTATIONS) }
+                if (hasDirectValid) {
+                    recordExternalIfConstrained(type, requiredExternalTypes)
+                    if (propDecl.containingFile != null) queue.add(propDecl)
+                } else if (hasConstraints(propDecl)) {
+                    diagnostics.error(
+                        "RISS-VALIDATION",
+                        location,
+                        "Property type '${propDecl.simpleName.asString()}' has validation constraints; add @field:Valid so nested constraints are enforced",
+                        property,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun containerValueType(type: KSType, container: ContainerKind): KSType? {
+        val unwrapped = unwrapAlias(type)
+        val arg = when (container) {
+            ContainerKind.ITERABLE, ContainerKind.ARRAY -> unwrapped.arguments.firstOrNull()
+            ContainerKind.MAP -> unwrapped.arguments.getOrNull(1)
+        }
+        return arg?.type?.resolve()?.takeUnless { it.isError }
+    }
+
+    private fun recordExternalIfConstrained(type: KSType, requiredExternalTypes: MutableSet<String>) {
+        val decl = unwrapAlias(type).declaration as? KSClassDeclaration ?: return
+        if (decl.containingFile != null) return
+        if (!isAccessible(decl)) return
+        val qn = decl.qualifiedName?.asString() ?: return
+        if (hasConstraints(decl)) {
+            requiredExternalTypes += qn
+        }
+    }
+
+    private fun hasConstraints(declaration: KSClassDeclaration, visiting: MutableSet<String> = mutableSetOf()): Boolean {
+        if (declaration.classKind != ClassKind.CLASS && declaration.classKind != ClassKind.INTERFACE) return false
+        if (Modifier.VALUE in declaration.modifiers || Modifier.INLINE in declaration.modifiers) return false
+        val qn = declaration.qualifiedName?.asString() ?: return false
+        if (qn.startsWith("kotlin.") || qn.startsWith("java.") || qn.startsWith("javax.") ||
+            qn.startsWith("jakarta.") || qn.startsWith("org.springframework.")
+        ) {
+            return false
+        }
+        constraintCache[qn]?.let { return it }
+        if (!visiting.add(qn)) return false
+
+        val ctorParams = declaration.primaryConstructor?.parameters
+            ?.associateBy { it.name?.asString().orEmpty() }
+            .orEmpty()
+
+        val found = declaration.getDeclaredProperties().any { property ->
+            if (Modifier.PRIVATE in property.modifiers || Modifier.PROTECTED in property.modifiers) return@any false
+            val propName = property.simpleName.asString()
+            val sources = buildList<KSAnnotated> {
+                add(property)
+                property.backingField?.let(::add)
+                property.getter?.let(::add)
+                ctorParams[propName]?.let(::add)
+                add(property.type)
+            }
+            if (sources.any { it.hasAny(Names.JSON_IGNORE_ANNOTATIONS) }) return@any false
+            if (sources.any { it.hasAny(Names.ALL_VALIDATION_ANNOTATIONS) }) return@any true
+            val resolved = property.type.resolve()
+            if (resolved.isError) return@any false
+            val container = containerKind(resolved) ?: return@any false
+            val valueArg = when (container) {
+                ContainerKind.ITERABLE, ContainerKind.ARRAY -> resolved.arguments.firstOrNull()
+                ContainerKind.MAP -> resolved.arguments.getOrNull(1)
+            }
+            val valueType = valueArg?.type?.resolve()
+            listOfNotNull(valueArg, valueArg?.type).any { it.hasAny(Names.ALL_VALIDATION_ANNOTATIONS) } ||
+                (valueType != null && !valueType.isError && valueType.annotations.any { ann ->
+                    Names.ALL_VALIDATION_ANNOTATIONS.any { ann.matches(it) }
+                })
+        } || declaration.getDeclaredFunctions().any { fn ->
+            if (Modifier.PRIVATE in fn.modifiers || Modifier.PROTECTED in fn.modifiers) return@any false
+            fn.parameters.isEmpty() && (
+                fn.annotationAny(Names.ASSERT_TRUE_ANNOTATIONS) != null ||
+                    fn.annotationAny(Names.ASSERT_FALSE_ANNOTATIONS) != null
+                )
+        } || declaration.superTypes.any { superRef ->
+            val superDecl = superRef.resolve().declaration as? KSClassDeclaration ?: return@any false
+            hasConstraints(superDecl, visiting)
+        }
+
+        visiting.remove(qn)
+        constraintCache[qn] = found
+        return found
     }
 
     private data class ParsedTarget(

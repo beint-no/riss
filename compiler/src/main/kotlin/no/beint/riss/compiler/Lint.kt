@@ -2,7 +2,9 @@ package no.beint.riss.compiler
 
 import no.beint.riss.model.OpenApi
 import no.beint.riss.model.Operation
+import no.beint.riss.model.Parameter
 import no.beint.riss.model.Schema
+import java.math.BigDecimal
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -17,12 +19,15 @@ internal data class LintOptions(
     val enumPattern: Regex? = null,
     val formatBySuffix: Map<String, String> = emptyMap(),
     val pageSchemaPrefix: String? = null,
+    val positiveIds: Boolean = false,
+    val kebabPaths: Boolean = false,
+    val requireSummary: Boolean = false,
     val baseline: Path? = null,
     val report: Path? = null,
 ) {
     val enabled: Boolean
         get() = bannedNames.isNotEmpty() || bannedNamePatterns.isNotEmpty() || bannedSchemaSuffixes.isNotEmpty() || enumPattern != null ||
-            formatBySuffix.isNotEmpty() || pageSchemaPrefix != null
+            formatBySuffix.isNotEmpty() || pageSchemaPrefix != null || positiveIds || kebabPaths || requireSummary
 }
 
 internal data class LintViolation(val key: String, val message: String)
@@ -31,11 +36,29 @@ internal class Lint(private val options: LintOptions) {
     fun violations(document: OpenApi): List<LintViolation> {
         val found = mutableListOf<LintViolation>()
         document.paths().toSortedMap().forEach { (path, item) ->
+            if (options.kebabPaths) {
+                kebabPath(path, found)
+            }
             item.operations().toSortedMap().forEach { (method, operation) ->
                 val location = "${method.uppercase()} $path"
+                if (options.requireSummary && operation.summary().isNullOrBlank()) {
+                    found += LintViolation("SUMMARY $location", "operation must declare a non-blank summary")
+                }
+                val pathParams = operation.parameters().filter { it.locatedIn() == "path" }
+                pathParams.forEach { parameter ->
+                    value("$location {${parameter.name()}}", parameter.name(), parameter.schema(), found)
+                    if (options.positiveIds) {
+                        positiveId("$location {${parameter.name()}}", parameter, found)
+                    }
+                }
                 val query = operation.parameters().filter { it.locatedIn() == "query" }
-                query.forEach { parameter -> value("$location ?${parameter.name()}", parameter.name(), parameter.schema(), found) }
-                page(location, operation, query.map { it.name() }.toSet(), found)
+                query.forEach { parameter ->
+                    value("$location ?${parameter.name()}", parameter.name(), parameter.schema(), found)
+                    if (options.positiveIds) {
+                        positiveId("$location ?${parameter.name()}", parameter, found)
+                    }
+                }
+                page(location, operation, query, found)
             }
         }
         document.components().schemas().toSortedMap().forEach { (name, schema) ->
@@ -69,6 +92,38 @@ internal class Lint(private val options: LintOptions) {
         }
     }
 
+    private fun kebabPath(path: String, found: MutableList<LintViolation>) {
+        val segments = path.split('/').filter(String::isNotEmpty)
+        for (segment in segments) {
+            if (segment.startsWith('{') && segment.endsWith('}')) {
+                val variable = segment.substring(1, segment.length - 1)
+                if (!CAMEL_VAR.matches(variable)) {
+                    found += LintViolation("PATH $path", "path variable '$segment' must be camelCase")
+                    return
+                }
+            } else if (!KEBAB_SEGMENT.matches(segment)) {
+                found += LintViolation("PATH $path", "path segment '$segment' must be lowercase kebab-case")
+                return
+            }
+        }
+    }
+
+    private fun positiveId(key: String, parameter: Parameter, found: MutableList<LintViolation>) {
+        val name = parameter.name()
+        if (name != "id" && !name.endsWithWord("Id")) return
+        val schema = parameter.schema()
+        if ("integer" !in schema.types()) return
+        if (!isPositiveInteger(schema)) {
+            found += LintViolation("ID $key", "integer ID parameter '$name' must have @Positive or @Min(1)")
+        }
+    }
+
+    private fun isPositiveInteger(schema: Schema): Boolean {
+        val min = schema.minimum()
+        val exMin = schema.exclusiveMinimum()
+        return (min != null && min >= BigDecimal.ONE) || (exMin != null && exMin >= BigDecimal.ZERO)
+    }
+
     private fun value(key: String, name: String, schema: Schema, found: MutableList<LintViolation>) {
         options.bannedNames[name]?.let { preferred ->
             found += LintViolation("NAME $key", "use '$preferred' instead of '$name'")
@@ -98,12 +153,25 @@ internal class Lint(private val options: LintOptions) {
         }
     }
 
-    private fun page(location: String, operation: Operation, query: Set<String>, found: MutableList<LintViolation>) {
+    private fun page(location: String, operation: Operation, query: List<Parameter>, found: MutableList<LintViolation>) {
         val prefix = options.pageSchemaPrefix ?: return
-        if ("page" !in query) return
-        val response = operation.responses()["200"]?.content()?.values?.firstOrNull()?.schema()?.ref()?.substringAfterLast('/')
-        if ("pageSize" !in query || response?.startsWith(prefix) != true) {
-            found += LintViolation("PAGE $location", "an operation taking 'page' must also take 'pageSize' and return $prefix")
+        val byName = query.associateBy { it.name() }
+        val pageParam = byName["page"]
+        val pageSizeParam = byName["pageSize"]
+        if (pageParam != null) {
+            val response = operation.responses()["200"]?.content()?.values?.firstOrNull()?.schema()?.ref()?.substringAfterLast('/')
+            if (pageSizeParam == null || response?.startsWith(prefix) != true) {
+                found += LintViolation("PAGE $location", "an operation taking 'page' must also take 'pageSize' and return $prefix")
+            }
+            if ("integer" in pageParam.schema().types() && !isPositiveInteger(pageParam.schema())) {
+                found += LintViolation("PAGE $location ?page", "'page' parameter must have @Positive or @Min(1)")
+            }
+        }
+        if (pageSizeParam != null && "integer" in pageSizeParam.schema().types()) {
+            val schema = pageSizeParam.schema()
+            if (!isPositiveInteger(schema) || schema.maximum() == null) {
+                found += LintViolation("PAGE $location ?pageSize", "'pageSize' parameter must have @Min(1)/@Positive and @Max(...)")
+            }
         }
     }
 
@@ -117,5 +185,7 @@ internal class Lint(private val options: LintOptions) {
 
     private companion object {
         const val MAX_REPORTED = 40
+        val KEBAB_SEGMENT = Regex("[a-z0-9]+(-[a-z0-9]+)*(?:\\.[a-z0-9]+)?")
+        val CAMEL_VAR = Regex("[a-z][a-zA-Z0-9]*")
     }
 }
