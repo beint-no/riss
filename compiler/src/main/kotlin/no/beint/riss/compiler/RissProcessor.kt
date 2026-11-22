@@ -26,38 +26,54 @@ private class RissProcessor(
             validateConfiguration()
             AnnotationIndex.reset()
             val diagnostics = Diagnostics()
-            EnumReader(options.classpath, diagnostics).use { enumReader ->
-                val schemas = SchemaFactory(enumReader, diagnostics, options.strict)
-                val documentTypes = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).toList()
-                val documentType = documentTypes.firstOrNull()
-                val documentAnnotation = documentType?.annotations?.firstOrNull { it.matches(Names.RISS_DOCUMENT) }
-                val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
-                val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
-                val excludePaths = documentAnnotation?.strings("excludePaths").orEmpty().ifEmpty { options.excludePaths }
-                val scanner = ControllerScanner(schemas, diagnostics, scanPackages, includePaths, excludePaths)
-                val functions = Names.mappings.keys
-                    .asSequence()
-                    .flatMap { resolver.getSymbolsWithAnnotation(it) }
-                    .filterIsInstance<KSFunctionDeclaration>()
-                    .distinct()
-                val operations = scanner.scan(functions)
-                if (operations.isEmpty()) {
-                    diagnostics.error(
-                        "RISS-EMPTY",
-                        "no HTTP mappings found in ${scanPackages.ifEmpty { listOf("the compilation") }.joinToString()}",
-                        documentType,
-                    )
-                }
-                val assembled = DocumentAssembler(enumReader, schemas, diagnostics, options).assemble(operations, documentTypes)
-                if (diagnostics.isEmpty() && options.lint.enabled) Lint(options.lint).check(assembled.document, diagnostics)
-                if (diagnostics.problems.isNotEmpty()) {
-                    diagnostics.problems.forEach { problem ->
-                        logger.error(problem.message, problem.symbol)
+            val validationModel = if (options.validation) {
+                ValidationCompiler(diagnostics).compile(resolver)
+            } else {
+                null
+            }
+            if (options.openApi) {
+                EnumReader(options.classpath, diagnostics).use { enumReader ->
+                    val schemas = SchemaFactory(enumReader, diagnostics, options.strict)
+                    val documentTypes = resolver.getSymbolsWithAnnotation(Names.RISS_DOCUMENT).toList()
+                    val documentType = documentTypes.firstOrNull()
+                    val documentAnnotation = documentType?.annotations?.firstOrNull { it.matches(Names.RISS_DOCUMENT) }
+                    val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
+                    val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
+                    val excludePaths = documentAnnotation?.strings("excludePaths").orEmpty().ifEmpty { options.excludePaths }
+                    val scanner = ControllerScanner(schemas, diagnostics, scanPackages, includePaths, excludePaths)
+                    val functions = Names.mappings.keys
+                        .asSequence()
+                        .flatMap { resolver.getSymbolsWithAnnotation(it) }
+                        .filterIsInstance<KSFunctionDeclaration>()
+                        .distinct()
+                    val operations = scanner.scan(functions)
+                    if (operations.isEmpty()) {
+                        diagnostics.error(
+                            "RISS-EMPTY",
+                            "no HTTP mappings found in ${scanPackages.ifEmpty { listOf("the compilation") }.joinToString()}",
+                            documentType,
+                        )
                     }
-                    return emptyList()
+                    val assembled = DocumentAssembler(enumReader, schemas, diagnostics, options).assemble(operations, documentTypes)
+                    if (diagnostics.isEmpty() && options.lint.enabled) Lint(options.lint).check(assembled.document, diagnostics)
+                    if (diagnostics.problems.isNotEmpty()) {
+                        diagnostics.problems.forEach { problem ->
+                            logger.error(problem.message, problem.symbol)
+                        }
+                        return emptyList()
+                    }
+                    SpecEmitter(codeGenerator, options.generatedPackage, options.registryName)
+                        .emit(assembled.document, assembled.specName, assembled.files)
                 }
-                SpecEmitter(codeGenerator, options.generatedPackage, options.registryName)
-                    .emit(assembled.document, assembled.specName, assembled.files)
+            } else if (diagnostics.problems.isNotEmpty()) {
+                diagnostics.problems.forEach { problem ->
+                    logger.error(problem.message, problem.symbol)
+                }
+                return emptyList()
+            }
+            if (validationModel != null) {
+                ValidationEmitter(codeGenerator, options.generatedPackage, options.validatorRegistryName)
+                    .emit(validationModel)
             }
         } catch (exception: IllegalArgumentException) {
             logger.error(exception.message ?: "Riss compilation failed")
@@ -75,6 +91,9 @@ private class RissProcessor(
         }
         require(options.registryName.matches(IDENTIFIER)) {
             "Invalid registry name '${options.registryName}'"
+        }
+        require(options.validatorRegistryName.matches(IDENTIFIER)) {
+            "Invalid validator registry name '${options.validatorRegistryName}'"
         }
     }
 

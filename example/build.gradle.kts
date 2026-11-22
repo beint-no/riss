@@ -13,7 +13,6 @@ dependencies {
     implementation(kotlin("reflect"))
     implementation(project(":spring"))
     implementation(libs.spring.boot.starter.webmvc)
-    implementation(libs.spring.boot.starter.validation)
     compileOnly(libs.swagger.annotations)
     ksp(project(":compiler"))
 

@@ -64,6 +64,31 @@ internal object Names {
     const val TOOLS_JSON_IGNORE = "tools.jackson.annotation.JsonIgnore"
     const val TOOLS_JSON_PROPERTY = "tools.jackson.annotation.JsonProperty"
     const val TOOLS_JSON_VALUE = "tools.jackson.annotation.JsonValue"
+    const val VALIDATED = "org.springframework.validation.annotation.Validated"
+    const val RISS_VALID = "no.beint.riss.validation.Valid"
+    const val RISS_NOT_NULL = "no.beint.riss.validation.NotNull"
+    const val RISS_NOT_BLANK = "no.beint.riss.validation.NotBlank"
+    const val RISS_NOT_EMPTY = "no.beint.riss.validation.NotEmpty"
+    const val RISS_SIZE = "no.beint.riss.validation.Size"
+    const val RISS_MIN = "no.beint.riss.validation.Min"
+    const val RISS_MAX = "no.beint.riss.validation.Max"
+    const val RISS_DECIMAL_MIN = "no.beint.riss.validation.DecimalMin"
+    const val RISS_DECIMAL_MAX = "no.beint.riss.validation.DecimalMax"
+    const val RISS_PATTERN = "no.beint.riss.validation.Pattern"
+    const val RISS_EMAIL = "no.beint.riss.validation.Email"
+    const val RISS_POSITIVE = "no.beint.riss.validation.Positive"
+    const val RISS_POSITIVE_OR_ZERO = "no.beint.riss.validation.PositiveOrZero"
+    const val RISS_NEGATIVE = "no.beint.riss.validation.Negative"
+    const val RISS_NEGATIVE_OR_ZERO = "no.beint.riss.validation.NegativeOrZero"
+    const val RISS_DIGITS = "no.beint.riss.validation.Digits"
+    const val RISS_PAST = "no.beint.riss.validation.Past"
+    const val RISS_PAST_OR_PRESENT = "no.beint.riss.validation.PastOrPresent"
+    const val RISS_FUTURE = "no.beint.riss.validation.Future"
+    const val RISS_FUTURE_OR_PRESENT = "no.beint.riss.validation.FutureOrPresent"
+    const val RISS_ASSERT_TRUE = "no.beint.riss.validation.AssertTrue"
+    const val RISS_ASSERT_FALSE = "no.beint.riss.validation.AssertFalse"
+
+    const val JAKARTA_VALID = "jakarta.validation.Valid"
     const val NOT_NULL = "jakarta.validation.constraints.NotNull"
     const val NOT_BLANK = "jakarta.validation.constraints.NotBlank"
     const val NOT_EMPTY = "jakarta.validation.constraints.NotEmpty"
@@ -76,7 +101,38 @@ internal object Names {
     const val EMAIL = "jakarta.validation.constraints.Email"
     const val POSITIVE = "jakarta.validation.constraints.Positive"
     const val POSITIVE_OR_ZERO = "jakarta.validation.constraints.PositiveOrZero"
+    const val NEGATIVE = "jakarta.validation.constraints.Negative"
+    const val NEGATIVE_OR_ZERO = "jakarta.validation.constraints.NegativeOrZero"
     const val DIGITS = "jakarta.validation.constraints.Digits"
+    const val PAST = "jakarta.validation.constraints.Past"
+    const val PAST_OR_PRESENT = "jakarta.validation.constraints.PastOrPresent"
+    const val FUTURE = "jakarta.validation.constraints.Future"
+    const val FUTURE_OR_PRESENT = "jakarta.validation.constraints.FutureOrPresent"
+    const val ASSERT_TRUE = "jakarta.validation.constraints.AssertTrue"
+    const val ASSERT_FALSE = "jakarta.validation.constraints.AssertFalse"
+
+    val VALID_ANNOTATIONS = listOf(RISS_VALID, JAKARTA_VALID)
+    val NOT_NULL_ANNOTATIONS = listOf(RISS_NOT_NULL, NOT_NULL)
+    val NOT_BLANK_ANNOTATIONS = listOf(RISS_NOT_BLANK, NOT_BLANK)
+    val NOT_EMPTY_ANNOTATIONS = listOf(RISS_NOT_EMPTY, NOT_EMPTY)
+    val SIZE_ANNOTATIONS = listOf(RISS_SIZE, SIZE)
+    val MIN_ANNOTATIONS = listOf(RISS_MIN, MIN)
+    val MAX_ANNOTATIONS = listOf(RISS_MAX, MAX)
+    val DECIMAL_MIN_ANNOTATIONS = listOf(RISS_DECIMAL_MIN, DECIMAL_MIN)
+    val DECIMAL_MAX_ANNOTATIONS = listOf(RISS_DECIMAL_MAX, DECIMAL_MAX)
+    val PATTERN_ANNOTATIONS = listOf(RISS_PATTERN, PATTERN)
+    val EMAIL_ANNOTATIONS = listOf(RISS_EMAIL, EMAIL)
+    val POSITIVE_ANNOTATIONS = listOf(RISS_POSITIVE, POSITIVE)
+    val POSITIVE_OR_ZERO_ANNOTATIONS = listOf(RISS_POSITIVE_OR_ZERO, POSITIVE_OR_ZERO)
+    val NEGATIVE_ANNOTATIONS = listOf(RISS_NEGATIVE, NEGATIVE)
+    val NEGATIVE_OR_ZERO_ANNOTATIONS = listOf(RISS_NEGATIVE_OR_ZERO, NEGATIVE_OR_ZERO)
+    val DIGITS_ANNOTATIONS = listOf(RISS_DIGITS, DIGITS)
+    val PAST_ANNOTATIONS = listOf(RISS_PAST, PAST)
+    val PAST_OR_PRESENT_ANNOTATIONS = listOf(RISS_PAST_OR_PRESENT, PAST_OR_PRESENT)
+    val FUTURE_ANNOTATIONS = listOf(RISS_FUTURE, FUTURE)
+    val FUTURE_OR_PRESENT_ANNOTATIONS = listOf(RISS_FUTURE_OR_PRESENT, FUTURE_OR_PRESENT)
+    val ASSERT_TRUE_ANNOTATIONS = listOf(RISS_ASSERT_TRUE, ASSERT_TRUE)
+    val ASSERT_FALSE_ANNOTATIONS = listOf(RISS_ASSERT_FALSE, ASSERT_FALSE)
 
     val mappings = mapOf(
         GET_MAPPING to setOf("GET"),
@@ -131,6 +187,11 @@ internal fun KSAnnotation.matches(qualifiedName: String): Boolean =
         AnnotationIndex.qualifiedName(this) == qualifiedName
 
 internal fun KSAnnotated.annotation(qualifiedName: String): KSAnnotation? = AnnotationIndex.find(this, qualifiedName)
+
+internal fun KSAnnotated.annotationAny(qualifiedNames: List<String>): KSAnnotation? =
+    qualifiedNames.firstNotNullOfOrNull { AnnotationIndex.find(this, it) }
+
+internal fun KSAnnotated.hasAny(qualifiedNames: List<String>): Boolean = annotationAny(qualifiedNames) != null
 
 internal fun KSAnnotated.annotationsNamed(qualifiedName: String): List<KSAnnotation> =
     AnnotationIndex.findAll(this, qualifiedName)

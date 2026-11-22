@@ -13,7 +13,13 @@ gradlePlugin {
             id = "no.beint.riss"
             implementationClass = "no.beint.riss.gradle.RissPlugin"
             displayName = "Riss compiler"
-            description = "Compile Spring MVC APIs into an OpenAPI 3.1 JSON document"
+            description = "Compile Spring MVC APIs into an OpenAPI 3.1 JSON document and compile-time validators"
+        }
+        create("rissValidation") {
+            id = "no.beint.riss.validation"
+            implementationClass = "no.beint.riss.gradle.RissValidationPlugin"
+            displayName = "Riss compile-time validation"
+            description = "Compile Riss validation annotations into reflection-free Kotlin validators"
         }
     }
 }

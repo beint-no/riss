@@ -7,6 +7,7 @@ import java.nio.file.Path
 internal data class RissOptions(
     val generatedPackage: String,
     val registryName: String,
+    val validatorRegistryName: String,
     val specName: String,
     val scanPackages: List<String>,
     val paths: List<String>,
@@ -14,6 +15,8 @@ internal data class RissOptions(
     val title: String?,
     val version: String,
     val strict: Boolean,
+    val openApi: Boolean,
+    val validation: Boolean,
     val classpath: List<Path>,
     val lint: LintOptions = LintOptions(),
 ) {
@@ -23,6 +26,7 @@ internal data class RissOptions(
             return RissOptions(
                 generatedPackage = options["riss.package"] ?: "riss.generated",
                 registryName = options["riss.registry"] ?: "RissSpec",
+                validatorRegistryName = options["riss.validatorRegistry"] ?: "RissValidators",
                 specName = options["riss.specName"] ?: "api",
                 scanPackages = csv(options["riss.scanPackages"]),
                 paths = csv(options["riss.paths"]),
@@ -30,6 +34,8 @@ internal data class RissOptions(
                 title = options["riss.title"]?.takeIf(String::isNotBlank),
                 version = options["riss.version"]?.takeIf(String::isNotBlank) ?: "1",
                 strict = options["riss.strict"]?.toBoolean() ?: true,
+                openApi = options["riss.openApi"]?.toBoolean() ?: true,
+                validation = options["riss.validation"]?.toBoolean() ?: true,
                 classpath = classpath(options["riss.classpathFile"]),
                 lint = LintOptions(
                     bannedNames = pairs(options["riss.lint.bannedNames"]),
