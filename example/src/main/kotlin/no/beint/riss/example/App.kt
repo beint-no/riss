@@ -199,7 +199,7 @@ class FeatureApi {
     fun pages(): Page<FeatureRes> = Page(emptyList(), null)
 
     @PostMapping("/probes")
-    fun probes(@RequestBody request: ProbeReq): ProbeReq = request
+    fun probes(@Valid @RequestBody request: ProbeReq): ProbeReq = request
 
     @GetMapping("/probes/{name}")
     fun probe(@PathVariable name: String): ProbeResult = ProbeResult.Ok(name)

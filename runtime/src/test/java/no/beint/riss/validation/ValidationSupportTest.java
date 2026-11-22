@@ -119,6 +119,25 @@ class ValidationSupportTest {
         assertThrows(RissValidationException.class, () -> validator.validateOrThrow(new ChildBean("", 0)));
     }
 
+    @Test
+    void validatorFailsFastWhenRequiredExternalTypeHasNoValidator() {
+        ValidatorSet incomplete = new ValidatorSet() {
+            @Override
+            public Map<Class<?>, TypeValidator> typeValidators() {
+                return Map.of();
+            }
+
+            @Override
+            public List<Class<?>> requiredTypes() {
+                return List.of(BaseBean.class);
+            }
+        };
+
+        var error = assertThrows(IllegalStateException.class, () -> new RissValidator(List.of(incomplete)));
+        assertTrue(error.getMessage().contains(BaseBean.class.getName()));
+        assertTrue(error.getMessage().contains("no.beint.riss.validation"));
+    }
+
     static class BaseBean {
         final String baseName;
 

@@ -84,4 +84,59 @@ class LintTest {
         assertTrue(messages[1].startsWith("RISS-LINT NAME OrderRequest.gone: no longer violates a rule"))
         assertEquals(listOf("NAME OrderRequest.currency"), Files.readAllLines(report))
     }
+
+    @Test
+    fun reportsPathParamsPositiveIdsKebabPathsSummariesAndPageBounds() {
+        val unboundedInt = Schema.builder().type("integer").build()
+        val positiveInt = Schema.builder().type("integer").minimum(java.math.BigDecimal.ONE).build()
+        val boundedPageSize = Schema.builder().type("integer")
+            .minimum(java.math.BigDecimal.ONE)
+            .maximum(java.math.BigDecimal.valueOf(200))
+            .build()
+
+        val badOp = Operation.builder("bad_op")
+            .parameter(Parameter.path("orgNumber", unboundedInt))
+            .parameter(Parameter.path("orderId", unboundedInt))
+            .parameter(Parameter.query("customerId", unboundedInt, false))
+            .parameter(Parameter.query("valid", unboundedInt, false))
+            .parameter(Parameter.query("page", unboundedInt, false))
+            .parameter(Parameter.query("pageSize", positiveInt, false))
+            .response("200", Response.json("OK", Schema.ref("#/components/schemas/Page_Order")))
+            .build()
+
+        val goodOp = Operation.builder("good_op")
+            .summary("List orders")
+            .parameter(Parameter.path("id", positiveInt))
+            .parameter(Parameter.query("page", positiveInt, false))
+            .parameter(Parameter.query("pageSize", boundedPageSize, false))
+            .response("200", Response.json("OK", Schema.ref("#/components/schemas/Page_Order")))
+            .build()
+
+        val doc = OpenApi.builder(Info("Test", "1", null, null))
+            .path("/api/BadPath/{orgNumber}/{orderId}", PathItem(mapOf("get" to badOp)))
+            .path("/api/good-path/{id}/export.csv", PathItem(mapOf("get" to goodOp)))
+            .schema("Page_Order", Schema.builder().type("object").build())
+            .build()
+
+        val strictOptions = LintOptions(
+            bannedNames = mapOf("orgNumber" to "organizationNumber"),
+            pageSchemaPrefix = "Page",
+            positiveIds = true,
+            kebabPaths = true,
+            requireSummary = true,
+        )
+
+        assertEquals(
+            listOf(
+                "PATH /api/BadPath/{orgNumber}/{orderId}",
+                "SUMMARY GET /api/BadPath/{orgNumber}/{orderId}",
+                "NAME GET /api/BadPath/{orgNumber}/{orderId} {orgNumber}",
+                "ID GET /api/BadPath/{orgNumber}/{orderId} {orderId}",
+                "ID GET /api/BadPath/{orgNumber}/{orderId} ?customerId",
+                "PAGE GET /api/BadPath/{orgNumber}/{orderId} ?page",
+                "PAGE GET /api/BadPath/{orgNumber}/{orderId} ?pageSize",
+            ),
+            Lint(strictOptions).violations(doc).map { it.key },
+        )
+    }
 }

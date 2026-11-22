@@ -10,7 +10,7 @@ internal class ValidationEmitter(
     private val registryName: String,
 ) {
     fun emit(model: ValidationModel) {
-        if (model.types.isEmpty() && model.methods.isEmpty()) {
+        if (model.types.isEmpty() && model.methods.isEmpty() && model.requiredExternalTypes.isEmpty()) {
             return
         }
         val dependencies = Dependencies(aggregating = true, *model.files.toTypedArray())
@@ -132,6 +132,14 @@ internal class ValidationEmitter(
             }
             out.appendLine("    }")
             out.appendLine()
+            if (model.requiredExternalTypes.isNotEmpty()) {
+                out.appendLine("    override fun requiredTypes(): List<Class<*>> = listOf(")
+                model.requiredExternalTypes.forEach { qn ->
+                    out.appendLine("        $qn::class.java,")
+                }
+                out.appendLine("    )")
+                out.appendLine()
+            }
             typeBodies.forEach { (_, _, body) ->
                 out.append(body)
                 out.appendLine()

@@ -20,16 +20,32 @@ public final class RissValidator {
     public RissValidator(Collection<ValidatorSet> sets) {
         var types = new HashMap<Class<?>, TypeValidator>();
         var methods = new HashMap<Class<?>, List<MethodValidatorEntry>>();
+        var required = new LinkedHashSet<Class<?>>();
         for (var set : sets) {
             types.putAll(set.typeValidators());
             for (var entry : set.methodValidators()) {
                 methods.computeIfAbsent(entry.controllerClass(), ignored -> new ArrayList<>()).add(entry);
             }
+            required.addAll(set.requiredTypes());
         }
         this.directTypeValidators = Map.copyOf(types);
         var immutableMethods = new HashMap<Class<?>, List<MethodValidatorEntry>>();
         methods.forEach((k, v) -> immutableMethods.put(k, List.copyOf(v)));
         this.methodEntriesByController = Map.copyOf(immutableMethods);
+        if (!required.isEmpty()) {
+            var missing = new ArrayList<String>();
+            for (var requiredType : required) {
+                if (validatorsFor(requiredType).isEmpty()) {
+                    missing.add(requiredType.getName());
+                }
+            }
+            if (!missing.isEmpty()) {
+                throw new IllegalStateException(
+                    "Missing Riss validator for " + String.join(", ", missing)
+                        + " — apply the 'no.beint.riss.validation' plugin to the module(s) defining them"
+                );
+            }
+        }
     }
 
     public static RissValidator load() {
