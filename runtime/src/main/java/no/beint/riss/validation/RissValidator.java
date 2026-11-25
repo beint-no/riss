@@ -56,9 +56,9 @@ public final class RissValidator {
         if (target == null) {
             return List.of();
         }
-        var violations = new ArrayList<ValidationViolation>();
-        validate(target, "", (field, message) -> violations.add(new ValidationViolation(field, message)));
-        return violations.isEmpty() ? List.of() : List.copyOf(violations);
+        var sink = new CollectingSink();
+        validate(target, "", sink);
+        return sink.toList();
     }
 
     public void validateOrThrow(Object target) {
@@ -105,9 +105,9 @@ public final class RissValidator {
         if (validator == NOOP_METHOD) {
             return List.of();
         }
-        var violations = new ArrayList<ValidationViolation>();
-        validator.validate(args, (field, message) -> violations.add(new ValidationViolation(field, message)), this);
-        return violations.isEmpty() ? List.of() : List.copyOf(violations);
+        var sink = new CollectingSink();
+        validator.validate(args, sink, this);
+        return sink.toList();
     }
 
     public void validateMethodArgumentsOrThrow(Method method, Object[] args) {
@@ -118,7 +118,8 @@ public final class RissValidator {
     }
 
     private List<TypeValidator> validatorsFor(Class<?> type) {
-        return resolvedTypeValidators.computeIfAbsent(type, this::resolveTypeValidators);
+        var cached = resolvedTypeValidators.get(type);
+        return cached != null ? cached : resolvedTypeValidators.computeIfAbsent(type, this::resolveTypeValidators);
     }
 
     private List<TypeValidator> resolveTypeValidators(Class<?> type) {
@@ -149,7 +150,24 @@ public final class RissValidator {
     }
 
     private MethodParameterValidator methodValidatorFor(Method method) {
-        return resolvedMethodValidators.computeIfAbsent(method, this::resolveMethodValidator);
+        var cached = resolvedMethodValidators.get(method);
+        return cached != null ? cached : resolvedMethodValidators.computeIfAbsent(method, this::resolveMethodValidator);
+    }
+
+    private static final class CollectingSink implements ValidationSink {
+        private List<ValidationViolation> violations;
+
+        @Override
+        public void reject(String field, String message) {
+            if (violations == null) {
+                violations = new ArrayList<>();
+            }
+            violations.add(new ValidationViolation(field, message));
+        }
+
+        List<ValidationViolation> toList() {
+            return violations == null ? List.of() : List.copyOf(violations);
+        }
     }
 
     private MethodParameterValidator resolveMethodValidator(Method method) {

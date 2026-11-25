@@ -237,18 +237,27 @@ internal class ValidationEmitter(
         val elemVar = "${varName}_e"
         val elemPathVar = "${varName}_p"
         val basePathVar = "${varName}_base"
-        out.appendLine("${indent}val $basePathVar = $pathExpr")
+        val eagerPath = target.cascadeValue
+        if (eagerPath) {
+            out.appendLine("${indent}val $basePathVar = $pathExpr")
+        }
+        val baseExpr = if (eagerPath) basePathVar else pathExpr
         when (target.kind) {
             ContainerKind.ITERABLE -> {
                 val idxVar = "${varName}_i"
                 out.appendLine("${indent}var $idxVar = 0")
                 out.appendLine("${indent}for ($elemVar in ($varName as Iterable<*>)) {")
-                out.appendLine("$indent    val $elemPathVar = ValidationSupport.indexedPath($basePathVar, $idxVar)")
+                val elemPathExpr = if (eagerPath) {
+                    out.appendLine("$indent    val $elemPathVar = ValidationSupport.indexedPath($baseExpr, $idxVar)")
+                    elemPathVar
+                } else {
+                    "ValidationSupport.indexedPath($baseExpr, $idxVar)"
+                }
                 emitValueChecks(
                     out = out,
                     indent = "$indent    ",
                     varName = elemVar,
-                    pathExpr = elemPathVar,
+                    pathExpr = elemPathExpr,
                     constraints = target.valueConstraints,
                     cascade = target.cascadeValue,
                     elementTarget = null,
@@ -263,12 +272,17 @@ internal class ValidationEmitter(
                 out.appendLine("${indent}val ${varName}_arr = $varName as Array<*>")
                 out.appendLine("${indent}for ($idxVar in ${varName}_arr.indices) {")
                 out.appendLine("$indent    val $elemVar: Any? = ${varName}_arr[$idxVar]")
-                out.appendLine("$indent    val $elemPathVar = ValidationSupport.indexedPath($basePathVar, $idxVar)")
+                val elemPathExpr = if (eagerPath) {
+                    out.appendLine("$indent    val $elemPathVar = ValidationSupport.indexedPath($baseExpr, $idxVar)")
+                    elemPathVar
+                } else {
+                    "ValidationSupport.indexedPath($baseExpr, $idxVar)"
+                }
                 emitValueChecks(
                     out = out,
                     indent = "$indent    ",
                     varName = elemVar,
-                    pathExpr = elemPathVar,
+                    pathExpr = elemPathExpr,
                     constraints = target.valueConstraints,
                     cascade = target.cascadeValue,
                     elementTarget = null,
@@ -281,12 +295,17 @@ internal class ValidationEmitter(
                 val entryVar = "${varName}_entry"
                 out.appendLine("${indent}for ($entryVar in ($varName as Map<*, *>).entries) {")
                 out.appendLine("$indent    val $elemVar: Any? = $entryVar.value")
-                out.appendLine("$indent    val $elemPathVar = ValidationSupport.mapPath($basePathVar, $entryVar.key)")
+                val elemPathExpr = if (eagerPath) {
+                    out.appendLine("$indent    val $elemPathVar = ValidationSupport.mapPath($baseExpr, $entryVar.key)")
+                    elemPathVar
+                } else {
+                    "ValidationSupport.mapPath($baseExpr, $entryVar.key)"
+                }
                 emitValueChecks(
                     out = out,
                     indent = "$indent    ",
                     varName = elemVar,
-                    pathExpr = elemPathVar,
+                    pathExpr = elemPathExpr,
                     constraints = target.valueConstraints,
                     cascade = target.cascadeValue,
                     elementTarget = null,

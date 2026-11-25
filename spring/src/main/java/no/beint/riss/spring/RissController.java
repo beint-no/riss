@@ -20,9 +20,9 @@ import java.util.Map;
 
 /**
  * Serves compiled specs on a fixed convention:
- * {@code GET /openapi} and {@code GET /openapi/ui} when there is one document,
- * {@code GET /openapi/{name}} and {@code GET /openapi/{name}/ui} when an app
- * publishes more than one document.
+ * {@code GET /openapi}, {@code GET /openapi.json}, and {@code GET /openapi/ui} when there is one document;
+ * {@code GET /openapi/{name}} and {@code GET /openapi/{name}/ui} when an app publishes more than one document
+ * (with {@code GET /openapi.json} serving {@code riss.primary-document} when configured).
  */
 @RestController
 public class RissController {
@@ -32,6 +32,7 @@ public class RissController {
     private final List<SpecSet> specs;
     private final RissProperties properties;
     private final Map<String, RissSpecResponse.Encoded> documents;
+    private final RissSpecResponse.Encoded primaryDocument;
 
     public RissController(RissProperties properties) {
         this(SpecSets.load(), properties);
@@ -42,9 +43,12 @@ public class RissController {
         this.properties = properties;
         var encoded = new LinkedHashMap<String, RissSpecResponse.Encoded>();
         for (var spec : this.specs) {
-            encoded.put(spec.name(), RissSpecResponse.Encoded.of(spec));
+            if (encoded.putIfAbsent(spec.name(), RissSpecResponse.Encoded.of(spec)) != null) {
+                throw new IllegalStateException("Duplicate Riss spec '" + spec.name() + "'");
+            }
         }
         this.documents = Map.copyOf(encoded);
+        this.primaryDocument = resolvePrimaryDocument(this.specs, this.documents, properties.getPrimaryDocument());
     }
 
     @GetMapping(path = "/openapi", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -54,9 +58,20 @@ public class RissController {
             HttpServletRequest request
     ) {
         if (specs.size() == 1) {
-            return json(specs.getFirst(), ifNoneMatch, acceptEncoding);
+            return RissSpecResponse.json(documents.get(specs.getFirst().name()), ifNoneMatch, acceptEncoding);
         }
         return catalog(request, ifNoneMatch);
+    }
+
+    @GetMapping(path = "/openapi.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<byte[]> openApiJson(
+            @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
+            @RequestHeader(value = HttpHeaders.ACCEPT_ENCODING, required = false) String acceptEncoding
+    ) {
+        if (primaryDocument == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return RissSpecResponse.json(primaryDocument, ifNoneMatch, acceptEncoding);
     }
 
     @GetMapping(path = "/openapi/ui", produces = MediaType.TEXT_HTML_VALUE)
@@ -82,9 +97,11 @@ public class RissController {
         if (specs.size() <= 1) {
             return ResponseEntity.notFound().build();
         }
-        return find(name)
-                .map(spec -> json(spec, ifNoneMatch, acceptEncoding))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        var document = documents.get(name);
+        if (document == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return RissSpecResponse.json(document, ifNoneMatch, acceptEncoding);
     }
 
     @GetMapping(path = "/openapi/{name}/ui", produces = MediaType.TEXT_HTML_VALUE)
@@ -93,28 +110,28 @@ public class RissController {
             @RequestHeader(value = HttpHeaders.IF_NONE_MATCH, required = false) String ifNoneMatch,
             HttpServletRequest request
     ) {
-        if (!properties.isUiEnabled() || specs.size() <= 1) {
+        if (!properties.isUiEnabled() || specs.size() <= 1 || !documents.containsKey(name)) {
             return ResponseEntity.notFound().build();
         }
-        return find(name)
-                .map(spec -> ui(RissRequestPath.resolve(request, "/openapi/" + spec.name()), ifNoneMatch))
-                .orElseGet(() -> ResponseEntity.notFound().build());
+        return ui(RissRequestPath.resolve(request, "/openapi/" + name), ifNoneMatch);
     }
 
-    private java.util.Optional<SpecSet> find(String name) {
-        return specs.stream().filter(spec -> spec.name().equals(name)).findFirst();
-    }
-
-    private ResponseEntity<byte[]> json(SpecSet spec, String ifNoneMatch, String acceptEncoding) {
-        return RissSpecResponse.json(encoded(spec), ifNoneMatch, acceptEncoding);
-    }
-
-    List<SpecSet> specs() {
-        return specs;
-    }
-
-    RissSpecResponse.Encoded encoded(SpecSet spec) {
-        return documents.get(spec.name());
+    private static RissSpecResponse.Encoded resolvePrimaryDocument(
+            List<SpecSet> specs,
+            Map<String, RissSpecResponse.Encoded> documents,
+            String configuredName
+    ) {
+        if (configuredName != null && !configuredName.isBlank()) {
+            var configured = documents.get(configuredName);
+            if (configured == null) {
+                throw new IllegalStateException("Unknown primary Riss spec '" + configuredName + "'");
+            }
+            return configured;
+        }
+        if (specs.size() == 1) {
+            return documents.get(specs.getFirst().name());
+        }
+        return null;
     }
 
     private ResponseEntity<byte[]> ui(String specPath, String ifNoneMatch) {

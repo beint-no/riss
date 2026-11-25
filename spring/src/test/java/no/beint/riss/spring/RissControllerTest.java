@@ -15,6 +15,7 @@ import java.util.zip.GZIPInputStream;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -31,6 +32,9 @@ class RissControllerTest {
         mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(content().bytes(PUBLIC_JSON));
+        mvc.perform(get("/openapi.json").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(PUBLIC_JSON));
         mvc.perform(get("/openapi/ui").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isOk())
                 .andExpect(result -> {
@@ -43,6 +47,9 @@ class RissControllerTest {
                 .andExpect(status().isNotFound());
         mvc.perform(get("/openapi/public/ui").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isNotFound());
+        for (var legacy : List.of("/v3/api-docs", "/api-docs", "/swagger-ui", "/swagger-ui.html")) {
+            mvc.perform(get(legacy)).andExpect(status().isNotFound());
+        }
     }
 
     @Test
@@ -225,8 +232,57 @@ class RissControllerTest {
 
         mvc.perform(get("/openapi").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
+        mvc.perform(get("/openapi.json").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
         mvc.perform(get("/openapi/ui").accept(MediaType.TEXT_HTML))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void openApiJsonServesConfiguredPrimaryDocumentForMultipleSpecs() throws Exception {
+        var properties = new RissProperties();
+        properties.setPrimaryDocument("public");
+        var mvc = MockMvcBuilders.standaloneSetup(
+                new RissController(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)), properties)
+        ).build();
+
+        var etag = mvc.perform(get("/openapi/public").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getHeader(HttpHeaders.ETAG);
+        mvc.perform(get("/openapi.json").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(PUBLIC_JSON))
+                .andExpect(result -> assertEquals(etag, result.getResponse().getHeader(HttpHeaders.ETAG)));
+        mvc.perform(get("/openapi.json").accept(MediaType.APPLICATION_JSON).header(HttpHeaders.IF_NONE_MATCH, etag))
+                .andExpect(status().isNotModified());
+    }
+
+    @Test
+    void openApiJsonReturnsNotFoundForMultipleSpecsWithoutPrimaryDocument() throws Exception {
+        var mvc = mvc(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)));
+
+        mvc.perform(get("/openapi.json").accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void unknownPrimaryDocumentFailsFastAtStartup() {
+        var properties = new RissProperties();
+        properties.setPrimaryDocument("missing");
+        assertThrows(
+                IllegalStateException.class,
+                () -> new RissController(List.of(spec("public", PUBLIC_JSON), spec("peppol", PEPPOL_JSON)), properties)
+        );
+    }
+
+    @Test
+    void duplicateSpecNameFailsFastAtStartup() {
+        assertThrows(
+                IllegalStateException.class,
+                () -> new RissController(List.of(spec("public", PUBLIC_JSON), spec("public", PEPPOL_JSON)), new RissProperties())
+        );
     }
 
     private static MockMvc mvc(List<SpecSet> specs) {
