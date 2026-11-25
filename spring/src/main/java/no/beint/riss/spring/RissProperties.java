@@ -5,7 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "riss")
 public class RissProperties {
     private boolean uiEnabled = true;
-    private final Compatibility compatibility = new Compatibility();
+    private String primaryDocument;
 
     public boolean isUiEnabled() {
         return uiEnabled;
@@ -15,28 +15,11 @@ public class RissProperties {
         this.uiEnabled = uiEnabled;
     }
 
-    public Compatibility getCompatibility() {
-        return compatibility;
+    public String getPrimaryDocument() {
+        return primaryDocument;
     }
 
-    public static class Compatibility {
-        private boolean enabled;
-        private String primaryDocument;
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public String getPrimaryDocument() {
-            return primaryDocument;
-        }
-
-        public void setPrimaryDocument(String primaryDocument) {
-            this.primaryDocument = primaryDocument;
-        }
+    public void setPrimaryDocument(String primaryDocument) {
+        this.primaryDocument = primaryDocument;
     }
 }

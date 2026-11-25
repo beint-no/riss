@@ -16,7 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "riss.compatibility.enabled=true",
                 "server.forward-headers-strategy=framework",
                 "spring.mvc.forwarded-headers.use-forwarded-prefix=true"
         }
@@ -32,15 +31,15 @@ class RissForwardedPrefixApplicationTest {
             .build();
 
     @Test
-    void redirectCannotBecomeSchemeRelative() throws Exception {
+    void explorerPathCannotBecomeSchemeRelative() throws Exception {
         var response = get(
-                "/swagger-ui.html",
+                "/openapi/ui",
                 "//attacker.example",
-                HttpResponse.BodyHandlers.discarding()
+                HttpResponse.BodyHandlers.ofString()
         );
 
-        assertEquals(307, response.statusCode());
-        assertEquals("/attacker.example/openapi/ui", response.headers().firstValue("Location").orElseThrow());
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("const specPath = \"/attacker.example/openapi\";"));
     }
 
     @Test
@@ -57,14 +56,8 @@ class RissForwardedPrefixApplicationTest {
     @Test
     void validPercentEncodingInForwardedPrefixIsPreserved() throws Exception {
         var forwardedPrefix = "/gateway%2Ftenant%20one";
-        var redirectResponse = get("/swagger-ui.html", forwardedPrefix, HttpResponse.BodyHandlers.discarding());
         var explorerResponse = get("/openapi/ui", forwardedPrefix, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(307, redirectResponse.statusCode());
-        assertEquals(
-                "/gateway%2Ftenant%20one/openapi/ui",
-                redirectResponse.headers().firstValue("Location").orElseThrow()
-        );
         assertEquals(200, explorerResponse.statusCode());
         assertTrue(explorerResponse.body().contains("/gateway%2Ftenant%20one/openapi"));
     }

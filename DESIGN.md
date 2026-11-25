@@ -35,12 +35,7 @@ The runtime, model, Spring adapter, Gradle plugin and MCP module are Java. The c
 
 A request for `GET /openapi` writes the compiled UTF-8 bytes, or their gzip encoding computed once at startup. `GET /openapi/ui` writes one HTML file. There is no schema walk and no YAML conversion at request time.
 
-Those paths are the convention. Apps do not configure a prefix. `@RissDocument` is the source of truth for scan packages, paths, and the document name. One compiled document is served only at `/openapi` and `/openapi/ui`. When several documents exist, `/openapi` lists them and each document is addressed as `/openapi/{name}`.
-
-The Spring adapter can opt into compatibility aliases for a primary document. An application
-with several documents must configure the primary document explicitly. JSON aliases serve the
-compiled bytes directly; UI aliases redirect to the canonical Riss explorer. The aliases are
-disabled by default so Riss does not conflict with Springdoc or application-owned routes.
+Those paths are the convention. Apps do not configure a prefix. `@RissDocument` is the source of truth for scan packages, paths, and the document name. One compiled document is served at `/openapi`, `/openapi.json`, and `/openapi/ui`. When several documents exist, `/openapi` lists them, each document is addressed as `/openapi/{name}`, and `/openapi.json` serves the configured `riss.primary-document` (or `404` when unset).
 
 ## Language
 

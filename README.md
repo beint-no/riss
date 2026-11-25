@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.1.23"
+    id("no.beint.riss") version "0.4.0"
 }
 ```
 
@@ -44,37 +44,28 @@ and DTOs are read as input.
 class PublicApiDocs
 ```
 
-The compiled document is served at `GET /openapi`. The explorer is at `GET /openapi/ui`.
-Those paths are fixed. Do not configure a custom prefix. `/openapi` includes an `ETag` and is
+The compiled document is served at `GET /openapi` and `GET /openapi.json`. The explorer is at `GET /openapi/ui`.
+Those paths are fixed. Do not configure a custom prefix. JSON endpoints include an `ETag` and are
 served gzip-encoded when the client accepts it; both representations are encoded once at startup.
 
 If an application compiles more than one document, `/openapi` lists them and each
 document is served at `/openapi/{name}` and `/openapi/{name}/ui`. A single document
-does not get a second URL from its name.
+does not get a second URL from its name. For multi-document applications, configure
+`riss.primary-document` to select which document `/openapi.json` serves (otherwise
+`/openapi.json` returns `404`):
+
+```yaml
+riss:
+  primary-document: public
+```
 
 `Any`, `Object` and `JsonNode` as nested fields become unconstrained JSON. Using them as the
 request or response root fails the build. Generic types keep their type arguments, so
 `Page<Invoice>` and `Page<User>` are different schemas.
 
 YAML is not a supported encoding. The JSON is minified. Agents should read `/openapi`
-when the application publishes one document. For multiple documents, `/openapi` is a
-catalog and agents should follow the `json` URL for the document they need.
-
-Applications can opt into compatibility aliases for tools that expect common Springdoc
-or OpenAPI paths:
-
-```yaml
-riss:
-  compatibility:
-    enabled: true
-    primary-document: public
-```
-
-The primary document is served directly at `/openapi.json`, `/v3/api-docs`, and
-`/api-docs`. `/swagger-ui`, `/swagger-ui/`, `/swagger-ui.html`, and `/swagger-ui/index.html` redirect
-to its Riss explorer. `primary-document` is optional for an application with one
-compiled document and required when several documents are present. Compatibility
-aliases are disabled by default to avoid conflicts with Springdoc or application routes.
+or `/openapi.json` when the application publishes one document. For multiple documents,
+`/openapi` is a catalog and agents should follow the `json` URL for the document they need.
 
 ## Lint
 

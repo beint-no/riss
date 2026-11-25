@@ -15,7 +15,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = {
-                "riss.compatibility.enabled=true",
                 "server.servlet.context-path=/context",
                 "spring.mvc.servlet.path=/dispatcher"
         }
@@ -29,15 +28,12 @@ class RissServletPathApplicationTest {
             .build();
 
     @Test
-    void redirectsAndExplorerPreserveContextAndServletPaths() throws Exception {
-        var redirectResponse = get("/context/dispatcher/swagger-ui.html", HttpResponse.BodyHandlers.discarding());
+    void openApiJsonAndExplorerPreserveContextAndServletPaths() throws Exception {
+        var specResponse = get("/context/dispatcher/openapi.json", HttpResponse.BodyHandlers.ofString());
         var explorerResponse = get("/context/dispatcher/openapi/ui", HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(307, redirectResponse.statusCode());
-        assertEquals(
-                "/context/dispatcher/openapi/ui",
-                redirectResponse.headers().firstValue("Location").orElseThrow()
-        );
+        assertEquals(200, specResponse.statusCode());
+        assertTrue(specResponse.body().contains("\"openapi\":\"3.1.0\""));
         assertEquals(200, explorerResponse.statusCode());
         assertTrue(explorerResponse.body().contains("const specPath = \"/context/dispatcher/openapi\";"));
     }
