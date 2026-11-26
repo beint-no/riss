@@ -39,6 +39,12 @@ public final class RissPlugin implements Plugin<Project> {
         extension.getLintPositiveIds().convention(false);
         extension.getLintKebabPaths().convention(false);
         extension.getLintRequireSummary().convention(false);
+        extension.getLintRequireValidRequestBody().convention(false);
+        extension.getLintRequireAuthorization().convention(false);
+        extension.getLintAuthorizationAnnotations().convention(
+                java.util.List.of("org.springframework.security.access.prepost.PreAuthorize")
+        );
+        extension.getLintPublicPaths().convention(java.util.List.of());
 
         project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlin(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
@@ -79,6 +85,10 @@ public final class RissPlugin implements Plugin<Project> {
         ksp.arg("riss.lint.positiveIds", extension.getLintPositiveIds().map(String::valueOf));
         ksp.arg("riss.lint.kebabPaths", extension.getLintKebabPaths().map(String::valueOf));
         ksp.arg("riss.lint.requireSummary", extension.getLintRequireSummary().map(String::valueOf));
+        ksp.arg("riss.lint.requireValidRequestBody", extension.getLintRequireValidRequestBody().map(String::valueOf));
+        ksp.arg("riss.lint.requireAuthorization", extension.getLintRequireAuthorization().map(String::valueOf));
+        ksp.arg("riss.lint.authorizationAnnotations", extension.getLintAuthorizationAnnotations().map(values -> String.join(",", values)));
+        ksp.arg("riss.lint.publicPaths", extension.getLintPublicPaths().map(values -> String.join(",", values)));
         ksp.arg("riss.lint.baseline", extension.getLintBaseline().map(file -> file.getAsFile().getAbsolutePath()).orElse(""));
         ksp.arg("riss.lint.report", project.getLayout().getBuildDirectory().file("riss/lint-violations.txt")
                 .map(file -> file.getAsFile().getAbsolutePath()));

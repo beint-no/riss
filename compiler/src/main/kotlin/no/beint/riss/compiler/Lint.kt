@@ -22,18 +22,28 @@ internal data class LintOptions(
     val positiveIds: Boolean = false,
     val kebabPaths: Boolean = false,
     val requireSummary: Boolean = false,
+    val requireAuthorization: Boolean = false,
+    val authorizationAnnotations: List<String> = DEFAULT_AUTHORIZATION_ANNOTATIONS,
+    val publicPaths: List<String> = emptyList(),
     val baseline: Path? = null,
     val report: Path? = null,
 ) {
     val enabled: Boolean
         get() = bannedNames.isNotEmpty() || bannedNamePatterns.isNotEmpty() || bannedSchemaSuffixes.isNotEmpty() || enumPattern != null ||
-            formatBySuffix.isNotEmpty() || pageSchemaPrefix != null || positiveIds || kebabPaths || requireSummary
+            formatBySuffix.isNotEmpty() || pageSchemaPrefix != null || positiveIds || kebabPaths || requireSummary || requireAuthorization
+
+    companion object {
+        val DEFAULT_AUTHORIZATION_ANNOTATIONS = listOf("org.springframework.security.access.prepost.PreAuthorize")
+    }
 }
 
 internal data class LintViolation(val key: String, val message: String)
 
 internal class Lint(private val options: LintOptions) {
-    fun violations(document: OpenApi): List<LintViolation> {
+    fun violations(
+        document: OpenApi,
+        authorizedOperations: Set<String> = emptySet(),
+    ): List<LintViolation> {
         val found = mutableListOf<LintViolation>()
         document.paths().toSortedMap().forEach { (path, item) ->
             if (options.kebabPaths) {
@@ -43,6 +53,15 @@ internal class Lint(private val options: LintOptions) {
                 val location = "${method.uppercase()} $path"
                 if (options.requireSummary && operation.summary().isNullOrBlank()) {
                     found += LintViolation("SUMMARY $location", "operation must declare a non-blank summary")
+                }
+                if (options.requireAuthorization &&
+                    location !in authorizedOperations &&
+                    options.publicPaths.none { PathPatterns.matches(it, path) }
+                ) {
+                    found += LintViolation(
+                        "AUTH $location",
+                        "operation must declare an authorization annotation (e.g. @PreAuthorize) or be listed in lintPublicPaths",
+                    )
                 }
                 val pathParams = operation.parameters().filter { it.locatedIn() == "path" }
                 pathParams.forEach { parameter ->
@@ -74,8 +93,12 @@ internal class Lint(private val options: LintOptions) {
     }
 
     /** Reports violations outside the baseline and baseline entries that no longer apply. */
-    fun check(document: OpenApi, diagnostics: Diagnostics) {
-        val violations = violations(document)
+    fun check(
+        document: OpenApi,
+        diagnostics: Diagnostics,
+        authorizedOperations: Set<String> = emptySet(),
+    ) {
+        val violations = violations(document, authorizedOperations)
         val baseline = options.baseline?.takeIf(Files::isRegularFile)?.let(::readBaseline).orEmpty()
         val fresh = violations.filter { it.key !in baseline }
         val stale = baseline - violations.map { it.key }.toSet()

@@ -21,7 +21,7 @@ do not acquire MCP dependencies, processing, endpoints, or configuration.
 ```kotlin
 plugins {
     kotlin("jvm")
-    id("no.beint.riss") version "0.4.0"
+    id("no.beint.riss") version "0.5.0"
 }
 ```
 
@@ -89,6 +89,8 @@ riss {
 * `lintEnumPattern`: every enum value must match.
 * `lintFormatBySuffix`: a name ending in the suffix must have that format.
 * `lintPageSchemaPrefix`: an operation taking `page` must also take `pageSize` and return a schema with this prefix.
+* `lintRequireValidRequestBody`: every `@RequestBody` parameter of a structured DTO type (or collection of structured DTOs) must carry `@Valid` (also configurable on the standalone validation plugin via `rissValidation { requireValidRequestBody.set(true) }`).
+* `lintRequireAuthorization`: every OpenAPI operation (method or enclosing controller class) must carry an authorization annotation from `lintAuthorizationAnnotations` (default `org.springframework.security.access.prepost.PreAuthorize`, including meta-annotations up to depth 3) unless its path matches `lintPublicPaths`.
 
 The baseline lists accepted violations, one key per line; text after ` #` is a comment. A key that no longer
 violates a rule also fails the build, so the baseline only shrinks. A failing build writes the keys of the new

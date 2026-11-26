@@ -27,7 +27,7 @@ private class RissProcessor(
             AnnotationIndex.reset()
             val diagnostics = Diagnostics()
             val validationModel = if (options.validation) {
-                ValidationCompiler(diagnostics).compile(resolver)
+                ValidationCompiler(diagnostics, options.requireValidRequestBody).compile(resolver)
             } else {
                 null
             }
@@ -40,7 +40,18 @@ private class RissProcessor(
                     val scanPackages = documentAnnotation?.strings("scanPackages").orEmpty().ifEmpty { options.scanPackages }
                     val includePaths = documentAnnotation?.strings("paths").orEmpty().ifEmpty { options.paths }
                     val excludePaths = documentAnnotation?.strings("excludePaths").orEmpty().ifEmpty { options.excludePaths }
-                    val scanner = ControllerScanner(schemas, diagnostics, scanPackages, includePaths, excludePaths)
+                    val scanner = ControllerScanner(
+                        schemas = schemas,
+                        diagnostics = diagnostics,
+                        scanPackages = scanPackages,
+                        includePaths = includePaths,
+                        excludePaths = excludePaths,
+                        authorizationAnnotations = if (options.lint.requireAuthorization) {
+                            options.lint.authorizationAnnotations.toSet()
+                        } else {
+                            emptySet()
+                        },
+                    )
                     val functions = Names.mappings.keys
                         .asSequence()
                         .flatMap { resolver.getSymbolsWithAnnotation(it) }
@@ -55,7 +66,13 @@ private class RissProcessor(
                         )
                     }
                     val assembled = DocumentAssembler(enumReader, schemas, diagnostics, options).assemble(operations, documentTypes)
-                    if (diagnostics.isEmpty() && options.lint.enabled) Lint(options.lint).check(assembled.document, diagnostics)
+                    val authorizedOperations = operations
+                        .filter { it.authorized }
+                        .map { "${it.method.uppercase()} ${it.path}" }
+                        .toSet()
+                    if (diagnostics.isEmpty() && options.lint.enabled) {
+                        Lint(options.lint).check(assembled.document, diagnostics, authorizedOperations)
+                    }
                     if (diagnostics.problems.isNotEmpty()) {
                         diagnostics.problems.forEach { problem ->
                             logger.error(problem.message, problem.symbol)
