@@ -24,6 +24,7 @@ internal data class ScannedOperation(
     val controller: KSClassDeclaration,
     val function: KSFunctionDeclaration,
     val file: KSFile?,
+    val authorized: Boolean = false,
 )
 
 internal class ControllerScanner(
@@ -32,15 +33,24 @@ internal class ControllerScanner(
     private val scanPackages: List<String>,
     private val includePaths: List<String>,
     private val excludePaths: List<String>,
+    private val authorizationAnnotations: Set<String> = emptySet(),
 ) {
     fun scan(functions: Sequence<KSFunctionDeclaration>): List<ScannedOperation> {
         val usedIds = mutableSetOf<String>()
         val operations = mutableListOf<ScannedOperation>()
+        val controllerAuthorizedCache = java.util.IdentityHashMap<KSClassDeclaration, Boolean>()
         functions.forEach { function ->
             val controller = function.parentDeclaration as? KSClassDeclaration ?: return@forEach
             if (!includedPackage(controller.packageNameString())) return@forEach
             if (ignored(controller) || ignored(function)) return@forEach
             val mapping = mapping(function) ?: return@forEach
+            val authorized = if (authorizationAnnotations.isNotEmpty()) {
+                controllerAuthorizedCache.getOrPut(controller) {
+                    controller.hasAnyMetaAnnotation(authorizationAnnotations)
+                } || function.hasAnyMetaAnnotation(authorizationAnnotations)
+            } else {
+                false
+            }
             val prefixes = classPaths(controller)
             val paths = mapping.paths.ifEmpty { listOf("") }
             prefixes.forEach { prefix ->
@@ -56,6 +66,7 @@ internal class ControllerScanner(
                             controller = controller,
                             function = function,
                             file = function.containingFile ?: controller.containingFile,
+                            authorized = authorized,
                         )
                     }
                 }
@@ -459,7 +470,10 @@ internal class ControllerScanner(
             group.drop(1).forEach { next ->
                 operation = mergeOperations(operation, next.operation)
             }
-            merged += group.first().copy(operation = operation)
+            merged += group.first().copy(
+                operation = operation,
+                authorized = group.all { it.authorized },
+            )
         }
         return merged
     }

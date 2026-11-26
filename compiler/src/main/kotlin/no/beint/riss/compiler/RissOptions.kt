@@ -17,6 +17,7 @@ internal data class RissOptions(
     val strict: Boolean,
     val openApi: Boolean,
     val validation: Boolean,
+    val requireValidRequestBody: Boolean = false,
     val classpath: List<Path>,
     val lint: LintOptions = LintOptions(),
 ) {
@@ -36,6 +37,7 @@ internal data class RissOptions(
                 strict = options["riss.strict"]?.toBoolean() ?: true,
                 openApi = options["riss.openApi"]?.toBoolean() ?: true,
                 validation = options["riss.validation"]?.toBoolean() ?: true,
+                requireValidRequestBody = options["riss.lint.requireValidRequestBody"]?.toBoolean() ?: false,
                 classpath = classpath(options["riss.classpathFile"]),
                 lint = LintOptions(
                     bannedNames = pairs(options["riss.lint.bannedNames"]),
@@ -47,6 +49,11 @@ internal data class RissOptions(
                     positiveIds = options["riss.lint.positiveIds"]?.toBoolean() ?: false,
                     kebabPaths = options["riss.lint.kebabPaths"]?.toBoolean() ?: false,
                     requireSummary = options["riss.lint.requireSummary"]?.toBoolean() ?: false,
+                    requireAuthorization = options["riss.lint.requireAuthorization"]?.toBoolean() ?: false,
+                    authorizationAnnotations = csv(options["riss.lint.authorizationAnnotations"]).ifEmpty {
+                        LintOptions.DEFAULT_AUTHORIZATION_ANNOTATIONS
+                    },
+                    publicPaths = csv(options["riss.lint.publicPaths"]),
                     baseline = options["riss.lint.baseline"]?.takeIf(String::isNotBlank)?.let(Path::of),
                     report = options["riss.lint.report"]?.takeIf(String::isNotBlank)?.let(Path::of),
                 ),

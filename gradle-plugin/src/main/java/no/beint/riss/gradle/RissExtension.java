@@ -59,6 +59,18 @@ public abstract class RissExtension {
     /** Require every operation to declare a non-blank summary. */
     public abstract Property<Boolean> getLintRequireSummary();
 
+    /** Require every {@code @RequestBody} parameter of a structured type to carry {@code @Valid}. */
+    public abstract Property<Boolean> getLintRequireValidRequestBody();
+
+    /** Require every OpenAPI operation to declare an authorization annotation or match {@code lintPublicPaths}. */
+    public abstract Property<Boolean> getLintRequireAuthorization();
+
+    /** Qualified names of authorization annotations recognized by {@code lintRequireAuthorization} (including meta-annotations). */
+    public abstract ListProperty<String> getLintAuthorizationAnnotations();
+
+    /** Path patterns exempted from {@code lintRequireAuthorization} (supports exact paths and {@code *}/{@code **} glob segments). */
+    public abstract ListProperty<String> getLintPublicPaths();
+
     /** Accepted violations, one key per line. Keys that no longer violate a rule fail the build. */
     public abstract RegularFileProperty getLintBaseline();
 }

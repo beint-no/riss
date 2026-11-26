@@ -12,7 +12,10 @@ import org.gradle.api.Project;
 public final class RissValidationPlugin implements Plugin<Project> {
     @Override
     public void apply(Project project) {
-        project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlin(project));
+        var extension = project.getExtensions().create("rissValidation", RissValidationExtension.class);
+        extension.getRequireValidRequestBody().convention(false);
+
+        project.getPluginManager().withPlugin("org.jetbrains.kotlin.jvm", ignored -> configureKotlin(project, extension));
         project.getPluginManager().withPlugin("java", ignored -> project.afterEvaluate(evaluated -> {
             if (!project.getPluginManager().hasPlugin("org.jetbrains.kotlin.jvm")) {
                 throw new GradleException("Riss validation currently requires the Kotlin JVM plugin");
@@ -20,7 +23,7 @@ public final class RissValidationPlugin implements Plugin<Project> {
         }));
     }
 
-    private void configureKotlin(Project project) {
+    private void configureKotlin(Project project, RissValidationExtension extension) {
         project.getPluginManager().apply("com.google.devtools.ksp");
         var version = RissPlugin.implementationVersion(project);
         project.getDependencies().add("implementation", "no.beint.riss:runtime:" + version);
@@ -30,5 +33,6 @@ public final class RissValidationPlugin implements Plugin<Project> {
         ksp.arg("riss.package", project.provider(() -> RissPlugin.generatedPackage(project)));
         ksp.arg("riss.openApi", "false");
         ksp.arg("riss.validation", "true");
+        ksp.arg("riss.lint.requireValidRequestBody", extension.getRequireValidRequestBody().map(String::valueOf));
     }
 }

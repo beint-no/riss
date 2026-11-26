@@ -5,6 +5,7 @@ import com.google.devtools.ksp.symbol.KSAnnotation
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeAlias
 
 internal object Names {
     const val REST_CONTROLLER = "org.springframework.web.bind.annotation.RestController"
@@ -215,6 +216,54 @@ internal fun KSAnnotated.annotationAny(qualifiedNames: List<String>): KSAnnotati
     qualifiedNames.firstNotNullOfOrNull { AnnotationIndex.find(this, it) }
 
 internal fun KSAnnotated.hasAny(qualifiedNames: List<String>): Boolean = annotationAny(qualifiedNames) != null
+
+internal fun KSAnnotated.hasAnyMetaAnnotation(
+    qualifiedNames: Set<String>,
+    maxDepth: Int = 3,
+): Boolean {
+    if (qualifiedNames.isEmpty()) return false
+    return hasAnyMetaAnnotation(this, qualifiedNames, depth = 0, maxDepth = maxDepth, seenAtDepth = mutableMapOf())
+}
+
+private fun hasAnyMetaAnnotation(
+    host: KSAnnotated,
+    targets: Set<String>,
+    depth: Int,
+    maxDepth: Int,
+    seenAtDepth: MutableMap<String, Int>,
+): Boolean {
+    for (annotation in host.annotations) {
+        var resolved = annotation.annotationType.resolve()
+        if (resolved.isError) continue
+        val aliasSeen = mutableSetOf<String>()
+        while (resolved.declaration is KSTypeAlias) {
+            val alias = resolved.declaration as KSTypeAlias
+            val aliasName = alias.qualifiedName?.asString() ?: break
+            if (!aliasSeen.add(aliasName)) break
+            val target = alias.type.resolve()
+            if (target.isError) break
+            resolved = target
+        }
+        val declaration = resolved.declaration
+        val qualifiedName = declaration.qualifiedName?.asString() ?: continue
+        if (qualifiedName in targets) return true
+        if (depth < maxDepth && !isBuiltinMetaAnnotation(qualifiedName)) {
+            val previousDepth = seenAtDepth[qualifiedName]
+            if (previousDepth == null || depth < previousDepth) {
+                seenAtDepth[qualifiedName] = depth
+                if (hasAnyMetaAnnotation(declaration, targets, depth + 1, maxDepth, seenAtDepth)) {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
+
+private fun isBuiltinMetaAnnotation(qualifiedName: String): Boolean =
+    qualifiedName.startsWith("kotlin.annotation.") ||
+        qualifiedName.startsWith("java.lang.annotation.") ||
+        qualifiedName == "kotlin.Metadata"
 
 internal fun KSAnnotated.annotationsNamed(qualifiedName: String): List<KSAnnotation> =
     AnnotationIndex.findAll(this, qualifiedName)

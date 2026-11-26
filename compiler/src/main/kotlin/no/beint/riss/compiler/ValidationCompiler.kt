@@ -103,6 +103,7 @@ internal sealed interface Constraint {
 
 internal class ValidationCompiler(
     private val diagnostics: Diagnostics,
+    private val requireValidRequestBody: Boolean = false,
 ) {
     private val constraintCache = mutableMapOf<String, Boolean>()
 
@@ -326,7 +327,8 @@ internal class ValidationCompiler(
             val isScalarBinding = param.annotation(Names.PATH_VARIABLE) != null ||
                 param.annotation(Names.REQUEST_PARAM) != null ||
                 param.annotation(Names.REQUEST_HEADER) != null
-            val isStructuredInput = param.annotation(Names.REQUEST_BODY) != null ||
+            val isRequestBody = param.annotation(Names.REQUEST_BODY) != null
+            val isStructuredInput = isRequestBody ||
                 param.annotation(Names.RISS_PARAMETER_OBJECT) != null ||
                 param.annotation(Names.SPRINGDOC_PARAMETER_OBJECT) != null ||
                 param.annotation(Names.REQUEST_PART) != null
@@ -359,17 +361,37 @@ internal class ValidationCompiler(
                 if (container != null) {
                     val valueType = containerValueType(type, container)
                     val valueDecl = valueType?.let { unwrapAlias(it).declaration as? KSClassDeclaration }
-                    if (valueDecl != null && hasConstraints(valueDecl) && parsed.elementTarget?.cascadeValue != true) {
-                        diagnostics.error(
-                            "RISS-VALIDATION",
-                            location,
-                            "Element type '${valueDecl.simpleName.asString()}' has validation constraints; add @Valid on the type argument (e.g. List<@Valid ${valueDecl.simpleName.asString()}>)",
-                            param,
-                        )
+                    if (parsed.elementTarget?.cascadeValue != true) {
+                        if (isRequestBody && requireValidRequestBody && isCollectionLike(type, container) &&
+                            valueType != null && isStructuredRequestBodyType(valueType) && valueDecl != null
+                        ) {
+                            val containerName = unwrapAlias(type).declaration.simpleName.asString()
+                            val typeName = "$containerName<${valueDecl.simpleName.asString()}>"
+                            diagnostics.error(
+                                "RISS-VALIDATION",
+                                location,
+                                "@RequestBody parameter '$fieldName' of structured type '$typeName' must be annotated with @Valid (use $containerName<@Valid ${valueDecl.simpleName.asString()}>)",
+                                param,
+                            )
+                        } else if (valueDecl != null && hasConstraints(valueDecl)) {
+                            diagnostics.error(
+                                "RISS-VALIDATION",
+                                location,
+                                "Element type '${valueDecl.simpleName.asString()}' has validation constraints; add @Valid on the type argument (e.g. List<@Valid ${valueDecl.simpleName.asString()}>)",
+                                param,
+                            )
+                        }
                     }
                 } else {
                     val decl = unwrapAlias(type).declaration as? KSClassDeclaration
-                    if (decl != null && hasConstraints(decl)) {
+                    if (isRequestBody && requireValidRequestBody && isStructuredRequestBodyType(type) && decl != null) {
+                        diagnostics.error(
+                            "RISS-VALIDATION",
+                            location,
+                            "@RequestBody parameter '$fieldName' of structured type '${decl.simpleName.asString()}' must be annotated with @Valid",
+                            param,
+                        )
+                    } else if (decl != null && hasConstraints(decl)) {
                         diagnostics.error(
                             "RISS-VALIDATION",
                             location,
@@ -925,6 +947,21 @@ internal class ValidationCompiler(
         }
     }
 
+    private fun isCollectionLike(rawType: KSType, container: ContainerKind): Boolean = when (container) {
+        ContainerKind.ITERABLE -> true
+        ContainerKind.ARRAY -> unwrapAlias(rawType).declaration.qualifiedName?.asString() == "kotlin.Array"
+        ContainerKind.MAP -> false
+    }
+
+    private fun isStructuredRequestBodyType(rawType: KSType): Boolean {
+        val type = unwrapAlias(rawType)
+        val decl = type.declaration as? KSClassDeclaration ?: return false
+        if (decl.classKind != ClassKind.CLASS && decl.classKind != ClassKind.INTERFACE) return false
+        if (Modifier.VALUE in decl.modifiers || Modifier.INLINE in decl.modifiers) return false
+        val qn = decl.qualifiedName?.asString() ?: return false
+        return UNSTRUCTURED_REQUEST_BODY_PREFIXES.none { qn.startsWith(it) }
+    }
+
     private fun isCharSequence(type: KSType): Boolean =
         unwrapAlias(type).declaration.qualifiedName?.asString() in CHAR_SEQUENCE_TYPES
 
@@ -1019,6 +1056,16 @@ internal class ValidationCompiler(
         val MAP_TYPES = setOf(
             "kotlin.collections.Map", "kotlin.collections.MutableMap",
             "java.util.Map", "java.util.LinkedHashMap", "java.util.HashMap",
+        )
+        val UNSTRUCTURED_REQUEST_BODY_PREFIXES = listOf(
+            "kotlin.",
+            "java.",
+            "javax.",
+            "jakarta.",
+            "org.springframework.",
+            "com.fasterxml.jackson.",
+            "tools.jackson.",
+            "kotlinx.serialization.json.",
         )
     }
 }

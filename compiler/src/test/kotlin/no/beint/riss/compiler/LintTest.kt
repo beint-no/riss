@@ -139,4 +139,55 @@ class LintTest {
             Lint(strictOptions).violations(doc).map { it.key },
         )
     }
+
+    @Test
+    fun requireAuthorizationRespectsAnnotatedOpsPublicPathsAndBaseline() {
+        val op = Operation.builder("op")
+            .summary("Summary")
+            .response("200", Response.of("OK"))
+            .build()
+        val doc = OpenApi.builder(Info("Test", "1", null, null))
+            .path("/api/health", PathItem(mapOf("get" to op)))
+            .path("/api/public/login", PathItem(mapOf("post" to op)))
+            .path("/api/public/nested/callback", PathItem(mapOf("get" to op)))
+            .path("/api/orders", PathItem(mapOf("get" to op, "post" to op)))
+            .path("/api/admin/users", PathItem(mapOf("get" to op)))
+            .build()
+
+        val authOptions = LintOptions(
+            requireAuthorization = true,
+            publicPaths = listOf("/api/health", "/api/public/**"),
+        )
+        val authorized = setOf("GET /api/orders")
+
+        val violations = Lint(authOptions).violations(doc, authorized)
+        assertEquals(
+            listOf(
+                LintViolation(
+                    "AUTH GET /api/admin/users",
+                    "operation must declare an authorization annotation (e.g. @PreAuthorize) or be listed in lintPublicPaths",
+                ),
+                LintViolation(
+                    "AUTH POST /api/orders",
+                    "operation must declare an authorization annotation (e.g. @PreAuthorize) or be listed in lintPublicPaths",
+                ),
+            ),
+            violations,
+        )
+
+        val baseline = Files.createTempFile("riss-auth-lint", ".txt")
+        Files.write(
+            baseline,
+            listOf(
+                "AUTH POST /api/orders # legacy endpoint",
+                "AUTH GET /api/orders # now authorized -> stale",
+            ),
+        )
+        val diagnostics = Diagnostics()
+        Lint(authOptions.copy(baseline = baseline)).check(doc, diagnostics, authorized)
+        val messages = diagnostics.problems.map { it.message }
+        assertEquals(2, messages.size)
+        assertTrue(messages[0].startsWith("RISS-LINT AUTH GET /api/admin/users: operation must declare an authorization annotation"))
+        assertTrue(messages[1].startsWith("RISS-LINT AUTH GET /api/orders: no longer violates a rule"))
+    }
 }
